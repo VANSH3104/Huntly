@@ -1,0 +1,22 @@
+{
+  "name": "agentforge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered Job Intelligence OS",
+  "scripts": {
+    "dev": "pnpm --filter @agentforge/desktop dev",
+    "dev:server": "pnpm --filter @agentforge/server dev",
+    "dev:all": "pnpm --parallel --filter @agentforge/server --filter @agentforge/desktop dev",
+    "seed": "pnpm --filter @agentforge/server exec tsx src/seed.ts",
+    "build:all": "pnpm run --recursive build",
+    "test": "pnpm run --recursive test",
+    "lint": "pnpm run --recursive lint",
+    "db:generate": "pnpm --filter @agentforge/database generate",
+    "db:migrate": "pnpm --filter @agentforge/database migrate",
+    "db:studio": "pnpm --filter @agentforge/database studio"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

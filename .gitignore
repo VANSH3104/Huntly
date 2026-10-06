@@ -1,0 +1,15 @@
+.env
+node_modules/
+dist/
+build/
+.turbo/
+*.db
+*.db-shm
+*.db-wal
+*.log
+.DS_Store
+target/
+src-tauri/target/
+*.tsbuildinfo
+endpoint-store.json
+apps/server/apps/
