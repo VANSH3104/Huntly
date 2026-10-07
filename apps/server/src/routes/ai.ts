@@ -5,6 +5,7 @@ import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { GeminiClient } from "../services/gemini.js";
+import { latexCompiler } from "../services/latex-compiler.js";
 
 export const aiRouter = Router();
 
@@ -105,6 +106,15 @@ aiRouter.post("/tailor-resume", async (req, res, next) => {
     const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
     if (!job) return res.status(404).json({ error: "Job not found" });
 
+    // Look up company name
+    let companyName = "company";
+    if (job.companyId) {
+      const [comp] = await db.select().from(companies).where(eq(companies.id, job.companyId)).limit(1);
+      if (comp?.name) {
+        companyName = comp.name;
+      }
+    }
+
     if (!resumeId) {
       const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
       if (!activeResume) return res.status(400).json({ error: "No active resume found" });
@@ -113,6 +123,27 @@ aiRouter.post("/tailor-resume", async (req, res, next) => {
 
     const [resume] = await db.select().from(resumes).where(eq(resumes.id, resumeId)).limit(1);
     if (!resume) return res.status(404).json({ error: "Resume not found" });
+
+    // Get candidate first name from parsed resume
+    let candidateName = "vansh";
+    if (resume.parsedJson) {
+      try {
+        const parsed = JSON.parse(resume.parsedJson);
+        if (parsed.name) {
+          const firstWord = parsed.name.trim().split(/\s+/)[0]?.toLowerCase();
+          if (firstWord && /^[a-z]+$/.test(firstWord)) {
+            candidateName = firstWord;
+          }
+        }
+      } catch {}
+    }
+
+    // Format requested filename: e.g. vansh_company_resume.pdf
+    const sanitizedCompany = companyName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "company";
+    const pdfFilename = `${candidateName}_${sanitizedCompany}_resume.pdf`;
 
     // Get existing AI analysis if available
     const cacheKey = crypto
@@ -134,12 +165,87 @@ aiRouter.post("/tailor-resume", async (req, res, next) => {
       analysis ? JSON.stringify(analysis) : ""
     );
 
+    // Convert LaTeX into PDF in-memory
+    const compileResult = await latexCompiler.compile(result.tailoredLatex, pdfFilename, resume.latex);
+
     res.json({
       tailoredLaTeX: result.tailoredLatex,
       tailoredLatex: result.tailoredLatex,
       changes: result.changes,
       warnings: result.warnings,
+      pdfFilename: compileResult.filename,
+      pdfBase64: compileResult.pdfBase64,
+      compileSuccess: compileResult.success,
+      compileError: compileResult.error,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/download-pdf — stream compiled PDF directly to browser without disk persistence
+aiRouter.post("/download-pdf", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      latex: z.string().min(10),
+      filename: z.string().default("vansh_resume.pdf"),
+    });
+    const { latex, filename } = schema.parse(req.body);
+    const compileResult = await latexCompiler.compile(latex, filename);
+
+    if (!compileResult.success || !compileResult.pdfBuffer) {
+      return res.status(500).json({ error: compileResult.error || "Compilation failed" });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${compileResult.filename}"`);
+    res.send(compileResult.pdfBuffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/compile-resume — direct compilation of LaTeX to PDF
+aiRouter.post("/compile-resume", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      latex: z.string().min(10),
+      jobId: z.string().optional(),
+      filename: z.string().optional(),
+    });
+    const { latex, jobId, filename } = schema.parse(req.body);
+    const db = getDatabase();
+
+    let targetFilename = filename;
+    if (!targetFilename) {
+      let companyName = "company";
+      if (jobId) {
+        const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
+        if (job?.companyId) {
+          const [comp] = await db.select().from(companies).where(eq(companies.id, job.companyId)).limit(1);
+          if (comp?.name) companyName = comp.name;
+        }
+      }
+      const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
+      let candidateName = "vansh";
+      if (activeResume?.parsedJson) {
+        try {
+          const parsed = JSON.parse(activeResume.parsedJson);
+          if (parsed.name) {
+            const firstWord = parsed.name.trim().split(/\s+/)[0]?.toLowerCase();
+            if (firstWord && /^[a-z]+$/.test(firstWord)) candidateName = firstWord;
+          }
+        } catch {}
+      }
+      const sanitizedCompany = companyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "") || "company";
+      targetFilename = `${candidateName}_${sanitizedCompany}_resume.pdf`;
+    }
+
+    const compileResult = await latexCompiler.compile(latex, targetFilename);
+    res.json(compileResult);
   } catch (err) {
     next(err);
   }
@@ -184,7 +290,46 @@ aiRouter.post("/generate-cover-letter", async (req, res, next) => {
   }
 });
 
+// POST /api/ai/expand-filters — expand user search keywords into intelligent multi-dimensional permutations
+aiRouter.post("/expand-filters", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      role: z.string().optional(),
+      keywords: z.string().optional(),
+      location: z.string().optional(),
+      skills: z.array(z.string()).optional(),
+    });
+    const { role, keywords, location, skills } = schema.parse(req.body);
+
+    const db = getDatabase();
+    let candidateSkills: string[] = skills || [];
+
+    if (candidateSkills.length === 0) {
+      const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
+      if (activeResume?.parsedJson) {
+        const parsed = safeParseJSON<{ skills?: string[] }>(activeResume.parsedJson, {});
+        if (Array.isArray(parsed.skills)) {
+          candidateSkills = parsed.skills;
+        }
+      }
+    }
+
+    const gemini = new GeminiClient();
+    const combinations = await gemini.generateSearchCombinations(
+      role || "",
+      keywords || "",
+      location || "Remote",
+      candidateSkills
+    );
+
+    res.json({ combinations });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function safeParseJSON<T>(val: string | null | undefined, fallback: T): T {
   if (!val) return fallback;
   try { return JSON.parse(val) as T; } catch { return fallback; }
 }
+
