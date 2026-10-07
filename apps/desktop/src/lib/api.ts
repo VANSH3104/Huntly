@@ -56,14 +56,40 @@ export const api = {
         body: JSON.stringify({ jobId, resumeId }),
       }),
     tailorResume: (jobId: string, resumeId?: string, targetLaTeX?: string) =>
-      request<{ tailoredLaTeX: string; changes: any[] }>("/ai/tailor-resume", {
+      request<{
+        tailoredLaTeX: string;
+        tailoredLatex: string;
+        changes: any[];
+        warnings?: string[];
+        pdfFilename?: string;
+        pdfBase64?: string;
+        compileSuccess?: boolean;
+        compileError?: string;
+      }>("/ai/tailor-resume", {
         method: "POST",
         body: JSON.stringify({ jobId, resumeId, targetLaTeX }),
+      }),
+    compileResume: (data: { latex: string; jobId?: string; filename?: string }) =>
+      request<{
+        success: boolean;
+        filename: string;
+        pdfBase64?: string;
+        error?: string;
+      }>("/ai/compile-resume", {
+        method: "POST",
+        body: JSON.stringify(data),
       }),
     generateCoverLetter: (jobId: string, resumeId?: string) =>
       request<{ coverLetter: string }>("/ai/generate-cover-letter", {
         method: "POST",
         body: JSON.stringify({ jobId, resumeId }),
+      }),
+    expandFilters: (params: { role?: string; keywords?: string; location?: string; skills?: string[] }) =>
+      request<{
+        combinations: Array<{ query: string; category: string; description: string }>;
+      }>("/ai/expand-filters", {
+        method: "POST",
+        body: JSON.stringify(params),
       }),
   },
 
@@ -103,6 +129,21 @@ export const api = {
       request<any>("/crawl/discover", { method: "POST", body: JSON.stringify(params) }),
     scrapeLinkedIn: (params: { keywords: string; location?: string; remoteOnly?: boolean }) =>
       request<any>("/crawl/linkedin", { method: "POST", body: JSON.stringify(params) }),
+    crawlCareerPage: (params: { url: string; companyName?: string }) =>
+      request<{ success: boolean; url: string; company: string; addedJobs: number }>("/crawl/career-page", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+    deepSearch: (params: { queries: string[]; location?: string; remoteOnly?: boolean; limitPerQuery?: number }) =>
+      request<{
+        success: boolean;
+        runId: string;
+        totalAdded: number;
+        results: Array<{ query: string; jobsAdded: number }>;
+      }>("/crawl/deep-search", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
   },
 
   // Applications
@@ -124,6 +165,14 @@ export const api = {
       request<any>("/resumes", { method: "POST", body: JSON.stringify(data) }),
     setActive: (id: string) =>
       request<any>(`/resumes/${id}/activate`, { method: "POST" }),
+    compile: (data?: { latex?: string; resumeId?: string; filename?: string }) =>
+      request<{ success: boolean; filename: string; pdfBase64?: string; error?: string }>(
+        "/resumes/compile",
+        {
+          method: "POST",
+          body: JSON.stringify(data || {}),
+        }
+      ),
   },
 
   // Analytics
