@@ -69,7 +69,7 @@ export const ApplicationsView: React.FC = () => {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h2 style={{ fontSize: "16px", fontWeight: 700 }}>Application Pipeline</h2>
+          <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Application Pipeline</h2>
           <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
             Track every submission directly tied to official job postings and ATS records.
           </div>
@@ -98,7 +98,9 @@ export const ApplicationsView: React.FC = () => {
                 minWidth: "200px",
                 display: "flex",
                 flexDirection: "column",
-                backgroundColor: "rgba(20, 27, 45, 0.4)",
+                backgroundColor: "var(--bg-card)",
+                border: "1px solid var(--border-subtle)",
+                boxShadow: "var(--shadow-sm)",
               }}
             >
               {/* Column Header */}
@@ -111,7 +113,7 @@ export const ApplicationsView: React.FC = () => {
                   justifyContent: "space-between",
                 }}
               >
-                <span style={{ fontWeight: 600, fontSize: "13px" }}>{col.title}</span>
+                <span style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>{col.title}</span>
                 <Badge variant={col.badgeVariant}>{colApps.length}</Badge>
               </div>
 
@@ -154,6 +156,9 @@ export const ApplicationsView: React.FC = () => {
                         flexDirection: "column",
                         gap: "8px",
                         cursor: "pointer",
+                        backgroundColor: "var(--bg-surface)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "var(--radius-md)",
                       }}
                       onClick={() => app.jobId && setSelectedJobId(app.jobId)}
                     >
@@ -163,7 +168,7 @@ export const ApplicationsView: React.FC = () => {
                       <div
                         style={{
                           fontSize: "11px",
-                          color: "var(--accent-cyan)",
+                          color: "var(--accent-indigo)",
                           display: "flex",
                           alignItems: "center",
                           gap: "4px",
