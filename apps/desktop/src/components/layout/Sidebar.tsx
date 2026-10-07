@@ -49,49 +49,49 @@ export const Sidebar: React.FC = () => {
       {/* Brand Header */}
       <div
         style={{
-          padding: "24px 20px",
+          padding: "20px 18px",
           display: "flex",
           alignItems: "center",
-          gap: "12px",
+          gap: "10px",
           borderBottom: "1px solid var(--border-subtle)",
         }}
       >
         <div
           style={{
-            width: "36px",
-            height: "36px",
-            borderRadius: "10px",
-            background: "var(--gradient-brand)",
+            width: "32px",
+            height: "32px",
+            borderRadius: "8px",
+            background: "linear-gradient(135deg, #6366f1 0%, #4338ca 100%)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 0 16px rgba(6, 182, 212, 0.4)",
+            boxShadow: "0 2px 10px rgba(99, 102, 241, 0.35)",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
           }}
         >
-          <Sparkles size={20} color="#ffffff" />
+          <Sparkles size={17} color="#ffffff" />
         </div>
         <div>
           <div
             style={{
-              fontWeight: 700,
-              fontSize: "16px",
+              fontWeight: 600,
+              fontSize: "14px",
               letterSpacing: "-0.02em",
-              background: "linear-gradient(90deg, #f8fafc, #94a3b8)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
+              color: "var(--text-primary)",
             }}
           >
             AgentForge
           </div>
           <div
             style={{
-              fontSize: "11px",
-              color: "var(--accent-cyan)",
+              fontSize: "10px",
+              color: "var(--accent-indigo)",
               fontFamily: "var(--font-mono)",
-              fontWeight: 500,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
             }}
           >
-            JOB INTELLIGENCE OS
+            INTELLIGENCE OS
           </div>
         </div>
       </div>
@@ -100,10 +100,10 @@ export const Sidebar: React.FC = () => {
       <nav
         style={{
           flex: 1,
-          padding: "16px 12px",
+          padding: "14px 10px",
           display: "flex",
           flexDirection: "column",
-          gap: "4px",
+          gap: "2px",
           overflowY: "auto",
         }}
       >
@@ -118,26 +118,28 @@ export const Sidebar: React.FC = () => {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "12px",
+                gap: "10px",
                 width: "100%",
-                padding: "10px 14px",
+                padding: "8px 12px",
                 borderRadius: "var(--radius-md)",
-                fontSize: "13px",
+                fontSize: "12.5px",
                 fontWeight: isActive ? 600 : 400,
-                color: isActive ? "#ffffff" : "var(--text-secondary)",
+                color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
                 backgroundColor: isActive
-                  ? "rgba(6, 182, 212, 0.12)"
+                  ? "var(--bg-card)"
                   : "transparent",
                 border: isActive
-                  ? "1px solid rgba(6, 182, 212, 0.25)"
+                  ? "1px solid var(--border-subtle)"
                   : "1px solid transparent",
-                transition: "all 0.15s ease",
+                boxShadow: isActive ? "var(--shadow-sm)" : "none",
+                transition: "all 0.12s ease",
                 textAlign: "left",
                 cursor: "pointer",
+                position: "relative",
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.04)";
+                  e.currentTarget.style.backgroundColor = "var(--bg-card-hover)";
                   e.currentTarget.style.color = "var(--text-primary)";
                 }
               }}
@@ -149,19 +151,19 @@ export const Sidebar: React.FC = () => {
               }}
             >
               <Icon
-                size={18}
-                color={isActive ? "var(--accent-cyan)" : "currentColor"}
+                size={16}
+                color={isActive ? "var(--accent-indigo)" : "var(--text-muted)"}
               />
               <span style={{ flex: 1 }}>{item.label}</span>
               {item.badge && (
                 <span
                   style={{
-                    fontSize: "11px",
+                    fontSize: "10px",
                     fontWeight: 600,
-                    padding: "2px 6px",
-                    borderRadius: "10px",
-                    backgroundColor: "rgba(59, 130, 246, 0.2)",
-                    color: "var(--accent-blue)",
+                    padding: "1px 6px",
+                    borderRadius: "8px",
+                    backgroundColor: "rgba(99, 102, 241, 0.12)",
+                    color: "var(--accent-indigo)",
                     fontFamily: "var(--font-mono)",
                   }}
                 >
@@ -178,7 +180,7 @@ export const Sidebar: React.FC = () => {
         style={{
           padding: "16px",
           borderTop: "1px solid var(--border-subtle)",
-          backgroundColor: "rgba(10, 13, 20, 0.5)",
+          backgroundColor: "var(--bg-surface)",
         }}
       >
         <div
