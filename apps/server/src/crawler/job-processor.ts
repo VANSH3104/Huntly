@@ -150,16 +150,20 @@ async function logEvent(
   url?: string,
   jobId?: string
 ): Promise<void> {
-  const db = getDatabase();
-  await db.insert(crawlEvents).values({
-    id: uuidv4(),
-    crawlRunId,
-    type,
-    message,
-    severity,
-    url,
-    jobId,
-  });
+  try {
+    const db = getDatabase();
+    await db.insert(crawlEvents).values({
+      id: uuidv4(),
+      crawlRunId,
+      type,
+      message,
+      severity,
+      url,
+      jobId,
+    });
+  } catch (_e) {
+    // Non-fatal: event logging should never block job insertion
+  }
 }
 
 function extractSkillsFromText(text: string): string[] {
