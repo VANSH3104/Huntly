@@ -248,7 +248,7 @@ export const DashboardView: React.FC = () => {
                 style={{
                   padding: "48px 24px",
                   textAlign: "center",
-                  backgroundColor: "rgba(0, 0, 0, 0.2)",
+                  backgroundColor: "var(--bg-surface)",
                   borderRadius: "var(--radius-md)",
                 }}
               >
@@ -317,7 +317,7 @@ export const DashboardView: React.FC = () => {
                   style={{
                     padding: "10px 12px",
                     borderRadius: "var(--radius-sm)",
-                    backgroundColor: "rgba(255, 255, 255, 0.02)",
+                    backgroundColor: "var(--bg-surface)",
                     border: "1px solid var(--border-subtle)",
                     fontSize: "12px",
                   }}
