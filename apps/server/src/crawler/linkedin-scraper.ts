@@ -1,8 +1,9 @@
 import * as cheerio from "cheerio";
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase, jobs, companies, sources } from "@agentforge/database";
-import { eq } from "drizzle-orm";
+import { getDatabase, jobs, companies, sources, resumes } from "@agentforge/database";
+import { eq, or } from "drizzle-orm";
 import { normalizeJobTitle, extractSkillsFromText } from "../utils/normalize.js";
+import { JobMatcher } from "../services/job-matcher.js";
 import crypto from "crypto";
 
 export interface LinkedInJobItem {
@@ -40,6 +41,9 @@ export class LinkedInScraper {
     const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?${queryParams.toString()}`;
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
+
       const response = await fetch(url, {
         headers: {
           "User-Agent":
@@ -47,11 +51,12 @@ export class LinkedInScraper {
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Language": "en-US,en;q=0.9",
         },
-        signal: AbortSignal.timeout(15000),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        console.warn(`[LinkedInScraper] Fetch failed with status ${response.status}`);
         return [];
       }
 
@@ -92,8 +97,8 @@ export class LinkedInScraper {
 
       console.log(`[LinkedInScraper] Scraped ${items.length} live postings from LinkedIn for "${keywords}" in "${location}"`);
       return items;
-    } catch (err) {
-      console.error("[LinkedInScraper] Error fetching LinkedIn jobs:", err);
+    } catch (err: any) {
+      console.warn(`[LinkedInScraper] Network note for "${keywords}": ${err?.message || "fetch timeout"}`);
       return [];
     }
   }
@@ -103,12 +108,14 @@ export class LinkedInScraper {
    */
   async ingestJobs(scrapedJobs: LinkedInJobItem[]): Promise<{ inserted: number; skipped: number }> {
     const db = getDatabase();
+    const matcher = new JobMatcher();
+    const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
     let inserted = 0;
     let skipped = 0;
 
     for (const item of scrapedJobs) {
       try {
-        // 1. Find or create company
+        // 1. Find or create company safely
         const domainSlug = item.companyName
           .toLowerCase()
           .replace(/[^a-z0-9]/g, "")
@@ -118,20 +125,25 @@ export class LinkedInScraper {
         let [company] = await db
           .select()
           .from(companies)
-          .where(eq(companies.name, item.companyName))
+          .where(or(eq(companies.name, item.companyName), eq(companies.domain, domain)))
           .limit(1);
 
         if (!company) {
           const compId = uuidv4();
-          await db.insert(companies).values({
-            id: compId,
-            name: item.companyName,
-            domain,
-            website: `https://${domain}`,
-            careerPage: item.url,
-            firstSeenAt: new Date(),
-          });
-          [company] = await db.select().from(companies).where(eq(companies.id, compId)).limit(1);
+          try {
+            await db.insert(companies).values({
+              id: compId,
+              name: item.companyName,
+              domain,
+              website: `https://${domain}`,
+              careerPage: item.url,
+              firstSeenAt: new Date(),
+            });
+            [company] = await db.select().from(companies).where(eq(companies.id, compId)).limit(1);
+          } catch {
+            // If domain already exists or concurrent insert happened
+            [company] = await db.select().from(companies).where(eq(companies.domain, domain)).limit(1);
+          }
         }
 
         if (!company) continue;
@@ -167,8 +179,9 @@ export class LinkedInScraper {
           .digest("hex")
           .slice(0, 16);
 
+        const jobId = uuidv4();
         await db.insert(jobs).values({
-          id: uuidv4(),
+          id: jobId,
           companyId: company.id,
           title: item.title,
           normalizedTitle,
@@ -191,6 +204,13 @@ export class LinkedInScraper {
           firstSeenAt: new Date(),
           lastVerifiedAt: new Date(),
         });
+
+        // Compute match score against active resume immediately so it appears on the board with score
+        if (activeResume) {
+          try {
+            await matcher.computeAndStore(jobId, activeResume.id);
+          } catch {}
+        }
 
         inserted++;
       } catch (err) {
