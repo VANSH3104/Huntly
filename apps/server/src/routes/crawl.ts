@@ -215,6 +215,15 @@ crawlRouter.post("/discover", async (req, res, next) => {
     const db = getDatabase();
     const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
 
+    const runId = uuidv4();
+    await db.insert(crawlRuns).values({
+      id: runId,
+      type: "search",
+      status: "running",
+      startedAt: new Date(),
+      statsJson: JSON.stringify({ searchTerm, location: loc, remoteOnly }),
+    });
+
     let linkedinCount = 0;
     let atsCount = 0;
 
@@ -233,13 +242,14 @@ crawlRouter.post("/discover", async (req, res, next) => {
       console.error("[Crawl Route] LinkedIn scrape error:", e);
     }
 
-    // 2. Discover official ATS career pages via Google / Serper search
+    // 2. Discover official ATS & YC career pages via Google / Serper search
     try {
       const searchProvider = createSearchProvider();
-      const searchQuery = `"${searchTerm}" ${loc} inurl:jobs site:greenhouse.io OR site:lever.co OR site:ashbyhq.com`;
+      // Search Greenhouse, Lever, Ashby, and YC startup career boards
+      const searchQuery = `"${searchTerm}" ${loc} (site:greenhouse.io OR site:lever.co OR site:ashbyhq.com OR site:workatastartup.com OR "Y Combinator") inurl:jobs`;
       const searchResults = await searchProvider.search(searchQuery);
 
-      for (const result of searchResults.slice(0, 10)) {
+      for (const result of searchResults.slice(0, 15)) {
         const ats = detectATS(result.url);
         if (!ats) continue;
         const slug = extractATSSlug(result.url, ats);
@@ -252,26 +262,43 @@ crawlRouter.post("/discover", async (req, res, next) => {
         if (!comp) {
           const compId = uuidv4();
           const compName = slug.charAt(0).toUpperCase() + slug.slice(1);
-          await db.insert(companies).values({
-            id: compId,
-            name: compName,
-            domain,
-            careerPage: result.url,
-            ats,
-          });
-          [comp] = await db.select().from(companies).where(eq(companies.id, compId)).limit(1);
+          try {
+            await db.insert(companies).values({
+              id: compId,
+              name: compName,
+              domain,
+              careerPage: result.url,
+              ats,
+            });
+            [comp] = await db.select().from(companies).where(eq(companies.id, compId)).limit(1);
+          } catch {
+            [comp] = await db.select().from(companies).where(eq(companies.domain, domain)).limit(1);
+          }
         }
         if (!comp) continue;
 
         const jobsFromAts = await adapter.discoverJobs(slug);
-        for (const j of jobsFromAts.slice(0, 15)) {
-          const res = await processExtractedJob(j, comp.id, undefined, "api-triggered", activeResume?.id);
+        for (const j of jobsFromAts.slice(0, 20)) {
+          const res = await processExtractedJob(j, comp.id, undefined, runId, activeResume?.id);
           if (res.action === "created") atsCount++;
         }
       }
     } catch (e) {
-      console.error("[Crawl Route] ATS search error:", e);
+      console.error("[Crawl Route] ATS & YC career search error:", e);
     }
+
+    // Mark run completed
+    await db.update(crawlRuns).set({
+      status: "completed",
+      finishedAt: new Date(),
+      statsJson: JSON.stringify({
+        searchTerm,
+        location: loc,
+        linkedin: linkedinCount,
+        careerPages: atsCount,
+        total: linkedinCount + atsCount,
+      }),
+    }).where(eq(crawlRuns.id, runId));
 
     res.json({
       success: true,
@@ -282,6 +309,212 @@ crawlRouter.post("/discover", async (req, res, next) => {
         careerPages: atsCount,
         total: linkedinCount + atsCount,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/crawl/career-page — crawl individual company career page or YC board and add jobs directly to board
+crawlRouter.post("/career-page", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      url: z.string().url(),
+      companyName: z.string().optional(),
+    });
+    const { url, companyName } = schema.parse(req.body);
+
+    const db = getDatabase();
+    const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
+
+    const runId = uuidv4();
+    await db.insert(crawlRuns).values({
+      id: runId,
+      type: "career",
+      status: "running",
+      startedAt: new Date(),
+      statsJson: JSON.stringify({ url, companyName }),
+    });
+
+    const parsedUrl = new URL(url);
+    const domain = parsedUrl.hostname.replace(/^www\./, "");
+    const compName = companyName || domain.split(".")[0]?.toUpperCase() || "Company";
+
+    let [company] = await db.select().from(companies).where(eq(companies.domain, domain)).limit(1);
+    if (!company) {
+      const compId = uuidv4();
+      await db.insert(companies).values({
+        id: compId,
+        name: compName,
+        domain,
+        website: `https://${domain}`,
+        careerPage: url,
+      });
+      [company] = await db.select().from(companies).where(eq(companies.id, compId)).limit(1);
+    }
+
+    if (!company) {
+      return res.status(500).json({ error: "Failed to initialize company record" });
+    }
+
+    let addedCount = 0;
+    const ats = detectATS(url);
+
+    // 1. Try ATS API Adapter if Greenhouse/Lever/Ashby
+    if (ats) {
+      const slug = extractATSSlug(url, ats);
+      const adapter = getATSAdapter(ats);
+      if (slug && adapter) {
+        const atsJobs = await adapter.discoverJobs(slug);
+        for (const j of atsJobs) {
+          const result = await processExtractedJob(j, company.id, undefined, runId, activeResume?.id);
+          if (result.action === "created") addedCount++;
+        }
+      }
+    }
+
+    // 2. If no ATS or 0 jobs found, use Playwright dynamic crawler
+    if (addedCount === 0) {
+      const { PlaywrightCrawler } = await import("../crawler/playwright-crawler.js");
+      const crawler = new PlaywrightCrawler();
+      const crawlResult = await crawler.crawl(url, { maxJobs: 50, timeout: 25000, handleScroll: true });
+
+      for (const j of crawlResult.jobs) {
+        const result = await processExtractedJob(j, company.id, undefined, runId, activeResume?.id);
+        if (result.action === "created") addedCount++;
+      }
+    }
+
+    await db.update(crawlRuns).set({
+      status: "completed",
+      finishedAt: new Date(),
+      statsJson: JSON.stringify({ url, addedCount }),
+    }).where(eq(crawlRuns.id, runId));
+
+    res.json({
+      success: true,
+      url,
+      company: compName,
+      addedJobs: addedCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/crawl/deep-search — crawl all AI-generated combination queries in parallel / sequence
+crawlRouter.post("/deep-search", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      queries: z.array(z.string()).min(1),
+      location: z.string().optional().default("India"),
+      remoteOnly: z.boolean().optional().default(false),
+      limitPerQuery: z.number().optional().default(15),
+    });
+    const { queries, location, remoteOnly, limitPerQuery } = schema.parse(req.body);
+
+    const db = getDatabase();
+    const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
+
+    const runId = uuidv4();
+    await db.insert(crawlRuns).values({
+      id: runId,
+      type: "search",
+      status: "running",
+      startedAt: new Date(),
+      statsJson: JSON.stringify({ queries, location, remoteOnly }),
+    });
+
+    const scraper = new LinkedInScraper();
+    const searchProvider = createSearchProvider();
+    const results: Array<{ query: string; jobsAdded: number }> = [];
+    let grandTotal = 0;
+
+    for (const q of queries.slice(0, 15)) {
+      const trimmed = q.trim();
+      if (!trimmed) continue;
+      let queryAdded = 0;
+
+      // Clean query for LinkedIn if it has site: operators
+      const linkedInQuery = trimmed.replace(/site:[^\s]+/gi, "").trim() || trimmed;
+
+      // 1. LinkedIn scrape
+      try {
+        const jobs = await scraper.scrapeJobs({
+          keywords: linkedInQuery,
+          location,
+          remoteOnly,
+          limit: limitPerQuery,
+        });
+        const ingested = await scraper.ingestJobs(jobs);
+        queryAdded += ingested.inserted;
+      } catch (err) {
+        console.warn(`[Deep Search] LinkedIn query failed for "${linkedInQuery}":`, err);
+      }
+
+      // 2. ATS / Career Portal discovery
+      try {
+        let atsQuery = trimmed;
+        if (!atsQuery.includes("site:")) {
+          atsQuery = `"${trimmed}" ${location} (site:greenhouse.io OR site:lever.co OR site:ashbyhq.com OR site:workatastartup.com OR "Y Combinator") inurl:jobs`;
+        }
+        const searchResults = await searchProvider.search(atsQuery);
+
+        for (const item of searchResults.slice(0, 10)) {
+          const ats = detectATS(item.url);
+          if (!ats) continue;
+          const slug = extractATSSlug(item.url, ats);
+          if (!slug) continue;
+          const adapter = getATSAdapter(ats);
+          if (!adapter) continue;
+
+          const domain = `${slug}.com`;
+          let [comp] = await db.select().from(companies).where(eq(companies.domain, domain)).limit(1);
+          if (!comp) {
+            const compId = uuidv4();
+            const compName = slug.charAt(0).toUpperCase() + slug.slice(1);
+            try {
+              await db.insert(companies).values({
+                id: compId,
+                name: compName,
+                domain,
+                careerPage: item.url,
+                ats,
+              });
+              [comp] = await db.select().from(companies).where(eq(companies.id, compId)).limit(1);
+            } catch {
+              [comp] = await db.select().from(companies).where(eq(companies.domain, domain)).limit(1);
+            }
+          }
+          if (!comp) continue;
+
+          const jobsFromAts = await adapter.discoverJobs(slug);
+          for (const j of jobsFromAts.slice(0, 10)) {
+            const extRes = await processExtractedJob(j, comp.id, undefined, runId, activeResume?.id);
+            if (extRes.action === "created") {
+              queryAdded++;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[Deep Search] ATS query failed for "${trimmed}":`, err);
+      }
+
+      grandTotal += queryAdded;
+      results.push({ query: trimmed, jobsAdded: queryAdded });
+    }
+
+    await db.update(crawlRuns).set({
+      status: "completed",
+      finishedAt: new Date(),
+      statsJson: JSON.stringify({ queriesCount: queries.length, grandTotal, results }),
+    }).where(eq(crawlRuns.id, runId));
+
+    res.json({
+      success: true,
+      runId,
+      totalAdded: grandTotal,
+      results,
     });
   } catch (err) {
     next(err);
