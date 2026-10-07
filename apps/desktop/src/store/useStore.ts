@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import type { NavTab, JobFilterState } from "../types";
 
+export type ThemeId =
+  | "soft-sand"
+  | "soft-peachy"
+  | "pastel-bliss"
+  | "pastel-dreamland"
+  | "dark"
+  | "light";
+
 interface AppState {
   currentTab: NavTab;
   setCurrentTab: (tab: NavTab) => void;
@@ -23,6 +31,10 @@ interface AppState {
 
   isNotificationPanelOpen: boolean;
   setIsNotificationPanelOpen: (open: boolean) => void;
+
+  theme: ThemeId;
+  setTheme: (theme: ThemeId) => void;
+  toggleTheme: () => void;
 }
 
 const defaultFilters: JobFilterState = {
@@ -36,6 +48,19 @@ const defaultFilters: JobFilterState = {
   sortBy: "matchScore",
   sortOrder: "desc",
 };
+
+const getInitialTheme = (): ThemeId => {
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("agentforge-theme") as ThemeId | null;
+    if (saved && saved !== ("golden-summer" as any)) return saved;
+  }
+  return "soft-sand"; // Default to elegant Soft Sand linen aesthetic
+};
+
+const initialTheme = getInitialTheme();
+if (typeof window !== "undefined") {
+  document.documentElement.setAttribute("data-theme", initialTheme);
+}
 
 export const useStore = create<AppState>((set) => ({
   currentTab: "dashboard",
@@ -63,4 +88,22 @@ export const useStore = create<AppState>((set) => ({
   isNotificationPanelOpen: false,
   setIsNotificationPanelOpen: (open) =>
     set({ isNotificationPanelOpen: open }),
+
+  theme: initialTheme,
+  setTheme: (theme) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("agentforge-theme", theme);
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+    set({ theme });
+  },
+  toggleTheme: () =>
+    set((state) => {
+      const nextTheme = state.theme === "dark" ? "soft-sand" : "dark";
+      if (typeof window !== "undefined") {
+        localStorage.setItem("agentforge-theme", nextTheme);
+        document.documentElement.setAttribute("data-theme", nextTheme);
+      }
+      return { theme: nextTheme };
+    }),
 }));
