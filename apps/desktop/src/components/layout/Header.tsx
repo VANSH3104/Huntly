@@ -5,8 +5,8 @@ import {
   Flame,
   Bell,
   RefreshCw,
-  SlidersHorizontal,
-  CheckCircle,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { api } from "../../lib/api";
 
@@ -16,6 +16,9 @@ export const Header: React.FC = () => {
     setIsCommandPaletteOpen,
     setIsNotificationPanelOpen,
     isNotificationPanelOpen,
+    theme,
+    setTheme,
+    toggleTheme,
   } = useStore();
 
   const [isCrawling, setIsCrawling] = useState(false);
@@ -60,10 +63,10 @@ export const Header: React.FC = () => {
   return (
     <header
       style={{
-        height: "64px",
-        padding: "0 32px",
-        backgroundColor: "rgba(15, 20, 32, 0.8)",
-        backdropFilter: "blur(12px)",
+        height: "56px",
+        padding: "0 28px",
+        backgroundColor: "var(--bg-header)",
+        backdropFilter: "blur(16px)",
         borderBottom: "1px solid var(--border-subtle)",
         display: "flex",
         alignItems: "center",
@@ -72,12 +75,12 @@ export const Header: React.FC = () => {
         flexShrink: 0,
       }}
     >
-      {/* Title */}
-      <div>
+      {/* Title & View status */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <h1
           style={{
-            fontSize: "18px",
-            fontWeight: 700,
+            fontSize: "14px",
+            fontWeight: 600,
             color: "var(--text-primary)",
             letterSpacing: "-0.01em",
           }}
@@ -87,37 +90,37 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Center / Right controls */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         {/* Cmd+K Search trigger */}
         <button
           onClick={() => setIsCommandPaletteOpen(true)}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "10px",
-            padding: "8px 16px",
+            gap: "8px",
+            padding: "6px 12px",
             backgroundColor: "var(--bg-input)",
             border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-md)",
             color: "var(--text-secondary)",
-            fontSize: "13px",
+            fontSize: "12.5px",
             cursor: "pointer",
-            width: "260px",
+            width: "240px",
             transition: "all 0.15s ease",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "var(--border-active)";
+            e.currentTarget.style.borderColor = "var(--border-hover)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.borderColor = "var(--border-subtle)";
           }}
         >
-          <Search size={15} color="var(--text-muted)" />
-          <span style={{ flex: 1, textAlign: "left" }}>Search jobs, commands...</span>
+          <Search size={14} color="var(--text-muted)" />
+          <span style={{ flex: 1, textAlign: "left", fontSize: "12px" }}>Search jobs, commands...</span>
           <kbd
             style={{
-              padding: "2px 6px",
-              backgroundColor: "var(--bg-surface)",
+              padding: "1px 5px",
+              backgroundColor: "rgba(120, 100, 80, 0.08)",
               borderRadius: "4px",
               fontSize: "10px",
               fontFamily: "var(--font-mono)",
@@ -131,20 +134,19 @@ export const Header: React.FC = () => {
 
         {/* Trigger Crawl Button */}
         <button
-          className="btn btn-primary"
+          className="btn btn-secondary"
           onClick={handleQuickCrawl}
           disabled={isCrawling}
           style={{
-            height: "36px",
-            padding: "0 14px",
+            height: "32px",
+            padding: "0 12px",
             fontSize: "12px",
-            fontWeight: 600,
           }}
         >
           {isCrawling ? (
-            <RefreshCw size={14} className="animate-spin" />
+            <RefreshCw size={13} className="animate-spin" />
           ) : (
-            <Flame size={14} />
+            <Flame size={13} color="var(--accent-amber)" />
           )}
           <span>{isCrawling ? "Discovering..." : "Run Discovery"}</span>
         </button>
@@ -152,8 +154,8 @@ export const Header: React.FC = () => {
         {crawlMessage && (
           <span
             style={{
-              fontSize: "12px",
-              color: "var(--accent-cyan)",
+              fontSize: "11px",
+              color: "var(--accent-emerald)",
               fontFamily: "var(--font-mono)",
             }}
           >
@@ -161,23 +163,47 @@ export const Header: React.FC = () => {
           </span>
         )}
 
+        {/* Theme Palette Selector */}
+        <select
+          value={theme}
+          onChange={(e) => setTheme(e.target.value as any)}
+          style={{
+            height: "32px",
+            padding: "0 8px 0 10px",
+            fontSize: "12px",
+            fontWeight: 500,
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--border-subtle)",
+            backgroundColor: "var(--bg-card)",
+            color: "var(--text-primary)",
+            cursor: "pointer",
+          }}
+          title="Select Aesthetic Color Palette"
+        >
+          <option value="soft-sand">🏖️ Soft Sand (Default)</option>
+          <option value="soft-peachy">🍑 Soft Peachy</option>
+          <option value="pastel-bliss">🌸 Pastel Bliss</option>
+          <option value="pastel-dreamland">✨ Pastel Dreamland</option>
+          <option value="dark">🌑 Obsidian Dark</option>
+        </select>
+
         {/* Notifications Button */}
         <button
           className="btn-icon btn-secondary"
           onClick={() => setIsNotificationPanelOpen(!isNotificationPanelOpen)}
-          style={{ position: "relative" }}
+          style={{ position: "relative", width: "32px", height: "32px" }}
           title="Notifications"
         >
-          <Bell size={16} />
+          <Bell size={14} />
           <span
             style={{
               position: "absolute",
-              top: "6px",
-              right: "6px",
-              width: "7px",
-              height: "7px",
+              top: "7px",
+              right: "7px",
+              width: "6px",
+              height: "6px",
               borderRadius: "50%",
-              backgroundColor: "var(--accent-cyan)",
+              backgroundColor: "var(--accent-indigo)",
             }}
           />
         </button>
