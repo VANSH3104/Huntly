@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getDatabase, settings } from "@agentforge/database";
 import { eq } from "drizzle-orm";
+import { latexCompiler } from "./latex-compiler.js";
 
 export interface LLMConfig {
   provider: "freellm" | "gemini" | "openai";
@@ -242,34 +243,88 @@ ${latexResume}
 RULES (CRITICAL — violating these is unacceptable):
 1. NEVER add experience, projects, companies, technologies, or metrics that do not exist in the original.
 2. NEVER change dates, titles, GPAs, or metrics.
-3. ONLY reorder sections, rephrase existing bullet points, and emphasize relevant existing skills.
-4. Preserve all LaTeX commands and compilation integrity.
-5. Keep the overall length similar.
-6. Naturally incorporate job-relevant keywords into existing descriptions when truthful.
+3. ONLY reorder sections, rephrase existing bullet points, and emphasize relevant existing skills truthfully.
+4. PRESERVE THE EXACT PREAMBLE AND STRUCTURE: Keep all \\documentclass, \\usepackage, geometry margins, custom macros, font commands, and the header info (name, contacts) exactly as defined in the original.
+5. KEEP SYNTAX VALID: Balance every \\begin{...} and \\end{...}.
+6. SPECIAL CHARACTERS: In regular bullet text, always escape special characters (e.g. use \\& for &, \\% for %, \\_ for _).
+7. Keep overall length strictly to 1 page if the original is 1 page.
 
-Return ONLY a JSON object:
-{
-  "tailoredLatex": "<complete modified LaTeX string>",
-  "changes": ["<specific change made 1>", ...],
-  "warnings": ["<any concern about the tailoring>"]
-}
+OUTPUT FORMAT (STRICT):
+Output your entire response using the following delimiters (do NOT put LaTeX inside a JSON string):
 
-Return ONLY valid JSON. No markdown. No explanation outside JSON.
+===CHANGES===
+- [Specific change 1]
+- [Specific change 2]
+
+===WARNINGS===
+- [Any caveat or gap, or None]
+
+===LATEX===
+[Complete, compilable LaTeX document starting with \\documentclass and ending with \\end{document}]
+===END===
 `;
 
-    const text = await this.generateText(prompt, "You are an expert LaTeX editor. Output ONLY valid JSON.");
-    const parsed = this.parseJsonFromText<{
-      tailoredLatex: string;
-      changes: string[];
-      warnings: string[];
-    }>(text);
+    const text = await this.generateText(prompt, "You are an expert LaTeX resume editor. Output raw LaTeX with the exact delimiter tags requested.");
+
+    let tailoredLatex = "";
+    let changes: string[] = [];
+    let warnings: string[] = [];
+
+    // 1. Try parsing delimited blocks
+    const latexMatch = text.match(/===LATEX===\s*([\s\S]*?)(?:===END===|$)/i) ||
+                       text.match(/```(?:latex|tex)\s*([\s\S]*?)```/i);
+    const changesMatch = text.match(/===CHANGES===\s*([\s\S]*?)(?:===WARNINGS===|===LATEX===|$)/i);
+    const warningsMatch = text.match(/===WARNINGS===\s*([\s\S]*?)(?:===LATEX===|$)/i);
+
+    if (latexMatch?.[1]) {
+      tailoredLatex = latexMatch[1].trim();
+      if (changesMatch?.[1]) {
+        changes = changesMatch[1]
+          .split("\n")
+          .map((l) => l.replace(/^[-*•]\s*/, "").trim())
+          .filter(Boolean);
+      }
+      if (warningsMatch?.[1]) {
+        warnings = warningsMatch[1]
+          .split("\n")
+          .map((l) => l.replace(/^[-*•]\s*/, "").trim())
+          .filter((l) => Boolean(l) && !l.toLowerCase().includes("none"));
+      }
+    } else {
+      // 2. Fallback: try parsing JSON if LLM returned JSON
+      try {
+        const parsed = this.parseJsonFromText<{
+          tailoredLatex?: string;
+          tailoredLaTeX?: string;
+          changes?: string[];
+          warnings?: string[];
+        }>(text);
+        tailoredLatex = parsed.tailoredLatex || parsed.tailoredLaTeX || "";
+        changes = parsed.changes || [];
+        warnings = parsed.warnings || [];
+      } catch {
+        // 3. Fallback: If text itself looks like LaTeX
+        if (text.includes("\\documentclass") || text.includes("\\begin{document}")) {
+          tailoredLatex = text;
+        } else {
+          throw new Error("Failed to parse valid LaTeX from AI response");
+        }
+      }
+    }
+
+    // Sanitize and protect LaTeX formatting integrity
+    tailoredLatex = latexCompiler.sanitizeLatex(tailoredLatex, latexResume);
 
     // Basic sanity check — if the output is significantly shorter, something went wrong
-    if (parsed.tailoredLatex && parsed.tailoredLatex.length < latexResume.length * 0.5) {
+    if (tailoredLatex && tailoredLatex.length < latexResume.length * 0.45) {
       throw new Error("Tailored resume appears truncated — rejected for safety");
     }
 
-    return parsed;
+    return {
+      tailoredLatex,
+      changes,
+      warnings,
+    };
   }
 
   async generateCoverLetter(
@@ -297,6 +352,60 @@ Requirements:
 `;
 
     return this.generateText(prompt, "You are a professional cover letter writer.");
+  }
+
+  async generateSearchCombinations(
+    role: string,
+    keywords: string,
+    location: string,
+    candidateSkills: string[] = []
+  ): Promise<Array<{ query: string; category: string; description: string }>> {
+    const prompt = `
+You are an expert technical recruiting AI specialized in sourcing jobs across LinkedIn, Y Combinator, and official ATS boards (Greenhouse, Lever, Ashby).
+
+CANDIDATE / TARGET PROFILE:
+Role: ${role || "Software Engineer"}
+Keywords: ${keywords || "TypeScript, Node.js, React"}
+Location: ${location || "India, Remote"}
+Top Candidate Skills: ${candidateSkills.slice(0, 15).join(", ") || "TypeScript, React, Node.js, Python, PostgreSQL"}
+
+Generate 8 to 12 diverse, high-yield job search combinations across multiple dimensions to find hidden matching opportunities:
+1. Role Synonyms & Titles (e.g. "Full Stack Developer", "Founding Engineer", "Software Development Engineer II")
+2. Core Tech Stack Permutations (e.g. "Node.js React TypeScript", "Golang Distributed Systems", "Fullstack FastAPI")
+3. Startup & YC Angles (e.g. "YC Founding Engineer", "Early Stage Startup Software Engineer", "Seed stage Full Stack")
+4. ATS Direct Portals (e.g. "Software Engineer site:ashbyhq.com", "Full Stack Developer site:greenhouse.io", "Backend Engineer site:lever.co")
+5. High-Intent Keywords (e.g. "Hiring Full Stack Remote", "Founding Developer")
+
+Return ONLY valid JSON with this structure:
+{
+  "combinations": [
+    {
+      "query": "<exact search query string>",
+      "category": "<role|stack|startup_yc|ats_portal|intent>",
+      "description": "<short 1-line reason>"
+    }
+  ]
+}
+`;
+
+    try {
+      const text = await this.generateText(prompt, "You are a technical recruiting sourcing expert. Output ONLY valid JSON.");
+      const parsed = this.parseJsonFromText<{
+        combinations: Array<{ query: string; category: string; description: string }>;
+      }>(text);
+      return parsed.combinations || [];
+    } catch (err) {
+      console.error("[Gemini] Failed to generate search combinations:", err);
+      const baseRole = role || keywords || "Software Engineer";
+      return [
+        { query: `${baseRole} ${location}`, category: "role", description: "Direct target role and location" },
+        { query: `Founding Engineer ${baseRole}`, category: "startup_yc", description: "Early-stage & YC startup roles" },
+        { query: `${baseRole} site:ashbyhq.com`, category: "ats_portal", description: "Ashby high-growth startup board" },
+        { query: `${baseRole} site:greenhouse.io`, category: "ats_portal", description: "Greenhouse verified career pages" },
+        { query: `${baseRole} site:lever.co`, category: "ats_portal", description: "Lever verified career pages" },
+        { query: `${baseRole} Remote`, category: "role", description: "Global and remote positions" },
+      ];
+    }
   }
 }
 
