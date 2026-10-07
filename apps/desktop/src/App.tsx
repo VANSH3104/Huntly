@@ -58,11 +58,11 @@ export const App: React.FC = () => {
         <div
           style={{
             position: "fixed",
-            top: "64px",
+            top: "56px",
             right: 0,
             bottom: 0,
             width: "360px",
-            backgroundColor: "rgba(15, 20, 32, 0.95)",
+            backgroundColor: "var(--bg-card)",
             backdropFilter: "blur(16px)",
             borderLeft: "1px solid var(--border-subtle)",
             boxShadow: "var(--shadow-lg)",
@@ -80,7 +80,7 @@ export const App: React.FC = () => {
               marginBottom: "16px",
             }}
           >
-            <h3 style={{ fontSize: "14px", fontWeight: 600 }}>System Notifications</h3>
+            <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>System Notifications</h3>
             <button
               className="btn btn-ghost"
               style={{ fontSize: "12px" }}
@@ -93,14 +93,14 @@ export const App: React.FC = () => {
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px" }}>
             <div
               style={{
-                padding: "12px",
+                padding: "12px 14px",
                 borderRadius: "var(--radius-md)",
-                backgroundColor: "rgba(255, 255, 255, 0.03)",
+                backgroundColor: "var(--bg-surface)",
                 border: "1px solid var(--border-subtle)",
                 fontSize: "12px",
               }}
             >
-              <div style={{ color: "var(--accent-cyan)", fontWeight: 600 }}>Crawl Engine Initialized</div>
+              <div style={{ color: "var(--accent-indigo)", fontWeight: 600 }}>Crawl Engine Initialized</div>
               <div style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
                 Connected to local SQLite database with 14 active ATS adapters and query generators ready.
               </div>
