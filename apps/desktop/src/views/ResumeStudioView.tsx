@@ -13,6 +13,8 @@ import {
   Upload,
   User,
   GraduationCap,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 
 const SAMPLE_LATEX = `\\documentclass[letterpaper,11pt]{article}
@@ -100,6 +102,42 @@ export const ResumeStudioView: React.FC = () => {
     },
   });
 
+  const [isCompiling, setIsCompiling] = useState(false);
+
+  const downloadPdfFromBase64 = (base64: string, filename: string) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+
+  const handleDownloadPdf = async () => {
+    setIsCompiling(true);
+    try {
+      const res = await api.resumes.compile({ latex: latexInput, filename: "vansh_master_resume.pdf" });
+      if (res.success && res.pdfBase64) {
+        downloadPdfFromBase64(res.pdfBase64, res.filename || "vansh_master_resume.pdf");
+      } else {
+        alert(`Compilation failed: ${res.error || "Unknown LaTeX compilation error"}`);
+      }
+    } catch (err: any) {
+      alert(`Error compiling PDF: ${err.message}`);
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
   const copyLatex = () => {
     navigator.clipboard.writeText(latexInput);
     setCopied(true);
@@ -129,6 +167,15 @@ export const ResumeStudioView: React.FC = () => {
               <CheckCircle size={14} /> Saved & Active!
             </span>
           )}
+          <button
+            className="btn btn-secondary"
+            onClick={handleDownloadPdf}
+            disabled={isCompiling}
+            title="Compile to PDF and download"
+          >
+            <Download size={14} />
+            <span>{isCompiling ? "Compiling PDF..." : "Download PDF"}</span>
+          </button>
           <button className="btn btn-secondary" onClick={copyLatex}>
             {copied ? <Check size={14} /> : <Copy size={14} />}
             <span>{copied ? "Copied" : "Copy LaTeX"}</span>
@@ -156,17 +203,17 @@ export const ResumeStudioView: React.FC = () => {
                   width: "44px",
                   height: "44px",
                   borderRadius: "50%",
-                  backgroundColor: "rgba(6, 182, 212, 0.15)",
-                  border: "1px solid var(--accent-cyan)",
+                  backgroundColor: "rgba(79, 70, 229, 0.12)",
+                  border: "1px solid rgba(79, 70, 229, 0.3)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <User size={22} color="var(--accent-cyan)" />
+                <User size={22} color="var(--accent-indigo)" />
               </div>
               <div>
-                <h3 style={{ fontSize: "15px", fontWeight: 600 }}>{parsedJson.name || "Candidate"}</h3>
+                <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>{parsedJson.name || "Candidate"}</h3>
                 <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
                   {parsedJson.email || "alex@example.com"}
                 </div>
@@ -179,15 +226,15 @@ export const ResumeStudioView: React.FC = () => {
                 type="text"
                 value={resumeName}
                 onChange={(e) => setResumeName(e.target.value)}
-                style={{ width: "100%" }}
+                style={{ width: "100%", backgroundColor: "var(--bg-card)", color: "var(--text-primary)", border: "1px solid var(--border-subtle)" }}
               />
             </div>
           </div>
 
           {/* Extracted Skills */}
           <div className="glass-panel" style={{ padding: "20px" }}>
-            <h4 style={{ fontSize: "13px", fontWeight: 600, marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
-              <Sparkles size={15} color="var(--accent-cyan)" />
+            <h4 style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <Sparkles size={15} color="var(--accent-indigo)" />
               Extracted Canonical Skills
             </h4>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
@@ -198,10 +245,11 @@ export const ResumeStudioView: React.FC = () => {
                     fontSize: "11px",
                     fontFamily: "var(--font-mono)",
                     padding: "4px 10px",
-                    backgroundColor: "rgba(6, 182, 212, 0.12)",
-                    border: "1px solid rgba(6, 182, 212, 0.3)",
+                    backgroundColor: "var(--bg-surface)",
+                    border: "1px solid var(--border-subtle)",
                     borderRadius: "4px",
-                    color: "var(--accent-cyan)",
+                    color: "var(--text-primary)",
+                    fontWeight: 500,
                   }}
                 >
                   {skill}
@@ -216,8 +264,8 @@ export const ResumeStudioView: React.FC = () => {
 
         {/* Right: LaTeX Code Editor */}
         <div className="glass-panel" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 600 }}>
+          <div style={{ display: "flex", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "10px", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
               <Code2 size={16} color="var(--accent-purple)" />
               LaTeX Source
             </div>
@@ -234,9 +282,10 @@ export const ResumeStudioView: React.FC = () => {
               height: "560px",
               fontFamily: "var(--font-mono)",
               fontSize: "12px",
-              lineHeight: 1.5,
-              backgroundColor: "var(--bg-input)",
-              color: "#e2e8f0",
+              lineHeight: 1.55,
+              backgroundColor: "var(--bg-card)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border-subtle)",
               padding: "16px",
               resize: "none",
               borderRadius: "var(--radius-md)",
