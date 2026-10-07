@@ -19,6 +19,7 @@ import {
   Briefcase,
   Layers,
   FileText,
+  Download,
 } from "lucide-react";
 
 export const JobDetailModal: React.FC = () => {
@@ -26,10 +27,48 @@ export const JobDetailModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<"details" | "ai" | "tailor">("details");
   const [isTailoring, setIsTailoring] = useState(false);
-  const [tailoredResult, setTailoredResult] = useState<{ tailoredLaTeX: string; changes: any[] } | null>(null);
+  const [tailoredResult, setTailoredResult] = useState<{
+    tailoredLaTeX: string;
+    changes: any[];
+    warnings?: string[];
+    pdfFilename?: string;
+    pdfBase64?: string;
+    compileSuccess?: boolean;
+    compileError?: string;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [coverLetter, setCoverLetter] = useState<string | null>(null);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+
+  const downloadPdfFromBase64 = (base64: string, filename: string) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+
+  const previewPdfFromBase64 = (base64: string) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  };
 
   const { data: job, isLoading } = useQuery({
     queryKey: ["job", selectedJobId],
@@ -102,43 +141,67 @@ export const JobDetailModal: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          border: "1px solid rgba(59, 130, 246, 0.3)",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8)",
+          border: "1px solid var(--border-subtle)",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+          backgroundColor: "var(--bg-card)",
         }}
       >
         {/* Modal Header */}
         <div
           style={{
-            padding: "20px 28px",
+            padding: "18px 24px",
             borderBottom: "1px solid var(--border-subtle)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            backgroundColor: "rgba(15, 20, 32, 0.9)",
+            backgroundColor: "var(--bg-header)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <ScoreRing score={job?.matchScore ?? 0.88} size={48} strokeWidth={4} />
+            <ScoreRing score={job?.matchScore ?? 0.88} size={46} strokeWidth={4} />
             <div>
-              <h2 style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-primary)" }}>
+              <h2 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
                 {job?.title || "Job Details"}
               </h2>
               <div
                 style={{
                   fontSize: "12px",
-                  color: "var(--accent-cyan)",
+                  color: "var(--text-secondary)",
                   display: "flex",
                   alignItems: "center",
-                  gap: "12px",
-                  marginTop: "2px",
+                  gap: "10px",
+                  marginTop: "3px",
                 }}
               >
-                <span>{job?.companyName || "Verified Company"}</span>
-                {job?.ats && <Badge variant="purple">{job.ats.toUpperCase()}</Badge>}
+                <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{job?.companyName || "Verified Company"}</span>
+                {job?.ats && (
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      fontFamily: "var(--font-mono)",
+                      padding: "1px 6px",
+                      borderRadius: "4px",
+                      backgroundColor: "var(--bg-surface)",
+                      color: "var(--text-secondary)",
+                      border: "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    {job.ats.toUpperCase()}
+                  </span>
+                )}
                 {job?.status && (
-                  <Badge variant={job.status === "active" ? "emerald" : "rose"}>
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      padding: "1px 6px",
+                      borderRadius: "10px",
+                      backgroundColor: job.status === "active" ? "rgba(16, 185, 129, 0.12)" : "rgba(244, 63, 94, 0.12)",
+                      color: job.status === "active" ? "var(--accent-emerald)" : "var(--accent-rose)",
+                      fontWeight: 500,
+                    }}
+                  >
                     {job.status.toUpperCase()}
-                  </Badge>
+                  </span>
                 )}
               </div>
             </div>
@@ -170,9 +233,9 @@ export const JobDetailModal: React.FC = () => {
         <div
           style={{
             display: "flex",
-            padding: "0 28px",
+            padding: "0 24px",
             borderBottom: "1px solid var(--border-subtle)",
-            backgroundColor: "rgba(10, 13, 20, 0.4)",
+            backgroundColor: "var(--bg-surface)",
             gap: "24px",
           }}
         >
@@ -182,8 +245,12 @@ export const JobDetailModal: React.FC = () => {
               padding: "12px 0",
               fontSize: "13px",
               fontWeight: activeTab === "details" ? 600 : 400,
-              color: activeTab === "details" ? "var(--accent-cyan)" : "var(--text-secondary)",
-              borderBottom: activeTab === "details" ? "2px solid var(--accent-cyan)" : "2px solid transparent",
+              color: activeTab === "details" ? "var(--text-primary)" : "var(--text-secondary)",
+              borderBottom: activeTab === "details" ? "2px solid var(--accent-indigo)" : "2px solid transparent",
+              background: "transparent",
+              borderTop: "none",
+              borderLeft: "none",
+              borderRight: "none",
               cursor: "pointer",
             }}
           >
@@ -195,15 +262,19 @@ export const JobDetailModal: React.FC = () => {
               padding: "12px 0",
               fontSize: "13px",
               fontWeight: activeTab === "ai" ? 600 : 400,
-              color: activeTab === "ai" ? "var(--accent-purple)" : "var(--text-secondary)",
-              borderBottom: activeTab === "ai" ? "2px solid var(--accent-purple)" : "2px solid transparent",
+              color: activeTab === "ai" ? "#a855f7" : "var(--text-secondary)",
+              borderBottom: activeTab === "ai" ? "2px solid #a855f7" : "2px solid transparent",
+              background: "transparent",
+              borderTop: "none",
+              borderLeft: "none",
+              borderRight: "none",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               gap: "6px",
             }}
           >
-            <Sparkles size={14} color="var(--accent-purple)" />
+            <Sparkles size={14} color="#a855f7" />
             Gemini Match Intelligence
           </button>
           <button
@@ -212,15 +283,19 @@ export const JobDetailModal: React.FC = () => {
               padding: "12px 0",
               fontSize: "13px",
               fontWeight: activeTab === "tailor" ? 600 : 400,
-              color: activeTab === "tailor" ? "var(--accent-emerald)" : "var(--text-secondary)",
-              borderBottom: activeTab === "tailor" ? "2px solid var(--accent-emerald)" : "2px solid transparent",
+              color: activeTab === "tailor" ? "var(--accent-indigo)" : "var(--text-secondary)",
+              borderBottom: activeTab === "tailor" ? "2px solid var(--accent-indigo)" : "2px solid transparent",
+              background: "transparent",
+              borderTop: "none",
+              borderLeft: "none",
+              borderRight: "none",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               gap: "6px",
             }}
           >
-            <FileCode size={14} color="var(--accent-emerald)" />
+            <FileCode size={14} color="var(--accent-indigo)" />
             LaTeX Resume Tailoring Studio
           </button>
         </div>
@@ -240,7 +315,7 @@ export const JobDetailModal: React.FC = () => {
                   flexWrap: "wrap",
                   gap: "16px",
                   padding: "14px 18px",
-                  backgroundColor: "rgba(255, 255, 255, 0.02)",
+                  backgroundColor: "var(--bg-surface)",
                   borderRadius: "var(--radius-md)",
                   border: "1px solid var(--border-subtle)",
                   fontSize: "12px",
@@ -262,8 +337,16 @@ export const JobDetailModal: React.FC = () => {
                 </div>
                 <div>
                   <span style={{ color: "var(--text-muted)" }}>Experience: </span>
-                  <span style={{ color: "var(--text-primary)" }}>
-                    {job?.experienceLevel || "Mid - Senior"}
+                  <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+                    {(() => {
+                      const exp = job?.experienceLevel;
+                      if (exp && exp !== "Mid - Senior") return exp;
+                      const t = (job?.title || "").toLowerCase();
+                      if (t.includes("intern")) return "Internship";
+                      if (t.includes("associate") || t.includes("junior") || t.includes("entry") || t.includes("fresher")) return "Entry Level (0-2 yrs)";
+                      if (t.includes("senior") || t.includes("lead") || t.includes("staff") || t.includes("principal")) return "Senior / Lead";
+                      return exp || "Mid Level (2-5 yrs)";
+                    })()}
                   </span>
                 </div>
                 <div>
@@ -277,7 +360,7 @@ export const JobDetailModal: React.FC = () => {
               {/* Skills required */}
               {job?.skills && job.skills.length > 0 && (
                 <div>
-                  <h4 style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
+                  <h4 style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px" }}>
                     Detected Skills & Tech Stack
                   </h4>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
@@ -288,10 +371,11 @@ export const JobDetailModal: React.FC = () => {
                           fontSize: "11px",
                           fontFamily: "var(--font-mono)",
                           padding: "3px 8px",
-                          backgroundColor: "rgba(6, 182, 212, 0.1)",
-                          border: "1px solid rgba(6, 182, 212, 0.25)",
-                          color: "var(--accent-cyan)",
+                          backgroundColor: "var(--bg-surface)",
+                          border: "1px solid var(--border-subtle)",
+                          color: "var(--text-primary)",
                           borderRadius: "4px",
+                          fontWeight: 500,
                         }}
                       >
                         {skill}
@@ -301,22 +385,137 @@ export const JobDetailModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Description */}
+              {/* Structured Role Description */}
               <div>
-                <h4 style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
-                  Role Description
+                <h4 style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "10px" }}>
+                  Role Overview & Description
                 </h4>
                 <div
                   style={{
-                    fontSize: "13px",
-                    lineHeight: 1.7,
-                    color: "var(--text-secondary)",
-                    whiteSpace: "pre-line",
+                    backgroundColor: "var(--bg-card)",
+                    padding: "20px 24px",
+                    borderRadius: "var(--radius-lg)",
+                    border: "1px solid var(--border-subtle)",
+                    boxShadow: "var(--shadow-sm)",
                   }}
                 >
-                  {job?.description || "No description provided."}
+                  {(() => {
+                    const desc = (job?.description || "").trim();
+                    if (!desc || desc.length < 50) {
+                      return <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>No description provided.</div>;
+                    }
+
+                    // Decode entities
+                    const decoded = desc
+                      .replace(/&amp;/g, "&")
+                      .replace(/&lt;/g, "<")
+                      .replace(/&gt;/g, ">")
+                      .replace(/&quot;/g, '"')
+                      .replace(/&#39;/g, "'")
+                      .replace(/&nbsp;/g, " ");
+
+                    const paragraphs = decoded.split(/\n\s*\n/).filter((p: string) => p.trim().length > 0);
+
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                        {paragraphs.map((para: string, pIdx: number) => {
+                          const lines = para.trim().split("\n").map((l: string) => l.trim()).filter(Boolean);
+                          const hasBullets = lines.some((l: string) => l.startsWith("•") || l.startsWith("-") || l.startsWith("*"));
+
+                          if (hasBullets) {
+                            return (
+                              <ul key={pIdx} style={{ paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px", margin: 0 }}>
+                                {lines.map((line: string, lIdx: number) => (
+                                  <li key={lIdx} style={{ fontSize: "13px", lineHeight: 1.6, color: "var(--text-primary)" }}>
+                                    {line.replace(/^[•\-\*]\s*/, "")}
+                                  </li>
+                                ))}
+                              </ul>
+                            );
+                          }
+
+                          // Heading line
+                          if (
+                            lines.length === 1 &&
+                            (para.trim().endsWith(":") ||
+                              /^(Job Description|Responsibilities|Requirements|Qualifications|About|What We Offer)/i.test(para.trim()))
+                          ) {
+                            return (
+                              <h5 key={pIdx} style={{ fontSize: "13.5px", fontWeight: 700, color: "var(--accent-indigo)", margin: "6px 0 2px" }}>
+                                {para.trim()}
+                              </h5>
+                            );
+                          }
+
+                          return (
+                            <p key={pIdx} style={{ margin: 0, fontSize: "13px", lineHeight: 1.65, color: "var(--text-primary)" }}>
+                              {para.trim()}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
+
+              {/* Responsibilities if parsed separately */}
+              {job?.responsibilities && Array.isArray(job.responsibilities) && job.responsibilities.length > 0 && (
+                <div>
+                  <h4 style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent-indigo)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Briefcase size={15} />
+                    Key Responsibilities
+                  </h4>
+                  <div
+                    style={{
+                      backgroundColor: "var(--bg-card)",
+                      padding: "18px 22px",
+                      borderRadius: "var(--radius-lg)",
+                      border: "1px solid var(--border-subtle)",
+                      boxShadow: "var(--shadow-sm)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    {job.responsibilities.map((r: string, idx: number) => (
+                      <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.6 }}>
+                        <span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "var(--accent-indigo)", marginTop: "8px", flexShrink: 0 }} />
+                        <span>{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Requirements if parsed separately */}
+              {job?.requirements && Array.isArray(job.requirements) && job.requirements.length > 0 && (
+                <div>
+                  <h4 style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent-indigo)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Sparkles size={15} />
+                    Requirements & Qualifications
+                  </h4>
+                  <div
+                    style={{
+                      backgroundColor: "var(--bg-card)",
+                      padding: "18px 22px",
+                      borderRadius: "var(--radius-lg)",
+                      border: "1px solid var(--border-subtle)",
+                      boxShadow: "var(--shadow-sm)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    {job.requirements.map((req: string, idx: number) => (
+                      <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.6 }}>
+                        <span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "var(--accent-indigo)", marginTop: "8px", flexShrink: 0 }} />
+                        <span>{req}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : activeTab === "ai" ? (
             /* Gemini Analysis View */
@@ -465,10 +664,10 @@ export const JobDetailModal: React.FC = () => {
                 style={{
                   padding: "12px 16px",
                   borderRadius: "var(--radius-md)",
-                  background: "rgba(16, 185, 129, 0.1)",
-                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  background: "rgba(79, 70, 229, 0.08)",
+                  border: "1px solid rgba(79, 70, 229, 0.25)",
                   fontSize: "12px",
-                  color: "var(--accent-emerald)",
+                  color: "var(--accent-indigo)",
                 }}
               >
                 <strong>Truthful Tailoring Guarantee:</strong> Bullet points and skills are re-ordered and highlighted
@@ -484,41 +683,144 @@ export const JobDetailModal: React.FC = () => {
                     style={{ fontSize: "14px", padding: "10px 24px" }}
                   >
                     <Sparkles size={16} />
-                    <span>{isTailoring ? "Tailoring with Gemini..." : "Generate Tailored LaTeX Resume"}</span>
+                    <span>{isTailoring ? "Tailoring & Compiling PDF..." : "Generate Tailored Resume (PDF + LaTeX)"}</span>
                   </button>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                      Tailored LaTeX Source:
-                    </span>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => copyToClipboard(tailoredResult.tailoredLaTeX)}
-                      style={{ fontSize: "12px", padding: "4px 10px" }}
-                    >
-                      {copied ? <Check size={14} /> : <Copy size={14} />}
-                      <span>{copied ? "Copied LaTeX!" : "Copy LaTeX"}</span>
-                    </button>
-                  </div>
-
-                  <pre
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {/* PDF Download Action Banner */}
+                  <div
                     style={{
-                      maxHeight: "360px",
-                      overflowY: "auto",
-                      backgroundColor: "var(--bg-input)",
-                      padding: "16px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "16px 20px",
+                      backgroundColor: "rgba(79, 70, 229, 0.06)",
+                      border: "1px solid rgba(79, 70, 229, 0.25)",
                       borderRadius: "var(--radius-md)",
-                      border: "1px solid var(--border-subtle)",
-                      fontSize: "12px",
-                      fontFamily: "var(--font-mono)",
-                      color: "var(--text-primary)",
-                      whiteSpace: "pre-wrap",
+                      flexWrap: "wrap",
+                      gap: "12px",
                     }}
                   >
-                    {tailoredResult.tailoredLaTeX}
-                  </pre>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <CheckCircle2 size={24} style={{ color: "var(--accent-indigo)", flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                          {tailoredResult.compileSuccess ? "Tailored PDF Ready" : "LaTeX Generated"}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+                          {tailoredResult.pdfFilename || "resume.pdf"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      {tailoredResult.pdfBase64 && (
+                        <>
+                          <button
+                            className="btn btn-primary"
+                            onClick={() =>
+                              downloadPdfFromBase64(
+                                tailoredResult.pdfBase64!,
+                                tailoredResult.pdfFilename || "vansh_company_resume.pdf"
+                              )
+                            }
+                            style={{
+                              fontSize: "13px",
+                              padding: "8px 16px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <Download size={15} />
+                            <span>Download PDF ({tailoredResult.pdfFilename || "resume.pdf"})</span>
+                          </button>
+
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() => previewPdfFromBase64(tailoredResult.pdfBase64!)}
+                            style={{
+                              fontSize: "12px",
+                              padding: "8px 14px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <ExternalLink size={14} />
+                            <span>Preview PDF</span>
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        className="btn btn-secondary"
+                        onClick={handleRunTailor}
+                        disabled={isTailoring}
+                        style={{ fontSize: "12px", padding: "8px 14px" }}
+                        title="Re-run tailoring"
+                      >
+                        <Sparkles size={14} />
+                        <span>{isTailoring ? "Tailoring..." : "Re-tailor"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Changes Summary */}
+                  {tailoredResult.changes && tailoredResult.changes.length > 0 && (
+                    <div
+                      style={{
+                        padding: "12px 16px",
+                        backgroundColor: "var(--bg-input)",
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--border-subtle)",
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "8px" }}>
+                        Truthful Tailoring Adjustments Made:
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.6" }}>
+                        {tailoredResult.changes.map((c, idx) => (
+                          <li key={idx}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* LaTeX Source View */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                        Pristine LaTeX Source:
+                      </span>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => copyToClipboard(tailoredResult.tailoredLaTeX)}
+                        style={{ fontSize: "12px", padding: "4px 10px" }}
+                      >
+                        {copied ? <Check size={14} /> : <Copy size={14} />}
+                        <span>{copied ? "Copied LaTeX!" : "Copy LaTeX"}</span>
+                      </button>
+                    </div>
+
+                    <pre
+                      style={{
+                        maxHeight: "320px",
+                        overflowY: "auto",
+                        backgroundColor: "var(--bg-input)",
+                        padding: "16px",
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--border-subtle)",
+                        fontSize: "12px",
+                        fontFamily: "var(--font-mono)",
+                        color: "var(--text-primary)",
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {tailoredResult.tailoredLaTeX}
+                    </pre>
+                  </div>
                 </div>
               )}
             </div>
