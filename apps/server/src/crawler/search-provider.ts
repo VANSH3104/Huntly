@@ -25,35 +25,49 @@ export class SerperSearchProvider implements SearchProvider {
   }
 
   async search(query: string): Promise<SearchResult[]> {
-    const response = await fetch("https://google.serper.dev/search", {
-      method: "POST",
-      headers: {
-        "X-API-KEY": this.apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ q: query, num: 10, gl: "in" }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Serper search failed: ${response.status}`);
+    if (!this.apiKey || this.apiKey.trim().length === 0) {
+      return [];
     }
 
-    const data = await response.json() as {
-      organic?: Array<{
-        link: string;
-        title: string;
-        snippet: string;
-        position: number;
-      }>;
-    };
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    return (data.organic ?? []).map(item => ({
-      url: item.link,
-      title: item.title ?? "",
-      snippet: item.snippet ?? "",
-      domain: extractDomain(item.link),
-      position: item.position,
-    }));
+      const response = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": this.apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ q: query, num: 10, gl: "in" }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json() as {
+        organic?: Array<{
+          link: string;
+          title: string;
+          snippet: string;
+          position: number;
+        }>;
+      };
+
+      return (data.organic ?? []).map(item => ({
+        url: item.link,
+        title: item.title ?? "",
+        snippet: item.snippet ?? "",
+        domain: extractDomain(item.link),
+        position: item.position,
+      }));
+    } catch {
+      return [];
+    }
   }
 }
 
