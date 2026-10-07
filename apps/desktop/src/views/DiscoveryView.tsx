@@ -67,12 +67,14 @@ export const DiscoveryView: React.FC = () => {
         className="glass-panel"
         style={{
           padding: "24px",
-          background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%)",
+          backgroundColor: "var(--bg-card)",
+          border: "1px solid var(--border-subtle)",
+          boxShadow: "var(--shadow-sm)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-          <Compass size={20} color="var(--accent-cyan)" />
-          <h2 style={{ fontSize: "16px", fontWeight: 700 }}>Career Page & ATS Discovery Probe</h2>
+          <Compass size={20} color="var(--accent-indigo)" />
+          <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Career Page & ATS Discovery Probe</h2>
         </div>
         <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "16px", maxWidth: "680px" }}>
           Enter any company website or ATS link (e.g. <code>stripe.com</code>, <code>figma.com</code>, or Greenhouse/Lever/Ashby URLs).
@@ -85,7 +87,7 @@ export const DiscoveryView: React.FC = () => {
             placeholder="https://company.com or career link"
             value={probeUrl}
             onChange={(e) => setProbeUrl(e.target.value)}
-            style={{ flex: 1 }}
+            style={{ flex: 1, backgroundColor: "var(--bg-input)", color: "var(--text-primary)", border: "1px solid var(--border-subtle)" }}
           />
           <button
             type="submit"
@@ -104,8 +106,8 @@ export const DiscoveryView: React.FC = () => {
               marginTop: "16px",
               padding: "14px 18px",
               borderRadius: "var(--radius-md)",
-              backgroundColor: probeResult.error ? "rgba(244, 63, 94, 0.1)" : "rgba(16, 185, 129, 0.1)",
-              border: `1px solid ${probeResult.error ? "rgba(244, 63, 94, 0.3)" : "rgba(16, 185, 129, 0.3)"}`,
+              backgroundColor: probeResult.error ? "rgba(225, 29, 72, 0.08)" : "rgba(79, 70, 229, 0.08)",
+              border: `1px solid ${probeResult.error ? "rgba(225, 29, 72, 0.25)" : "rgba(79, 70, 229, 0.25)"}`,
               fontSize: "13px",
             }}
           >
@@ -113,7 +115,7 @@ export const DiscoveryView: React.FC = () => {
               <span style={{ color: "var(--accent-rose)" }}>Probe failed: {probeResult.error}</span>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span style={{ color: "var(--accent-emerald)", fontWeight: 600 }}>
+                <span style={{ color: "var(--accent-indigo)", fontWeight: 600 }}>
                   ✓ Discovered: {probeResult.companyName || "Company"} ({probeResult.jobsFound ?? 0} jobs extracted)
                 </span>
                 <span style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
@@ -131,8 +133,8 @@ export const DiscoveryView: React.FC = () => {
         <div className="glass-panel" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Globe size={18} color="var(--accent-cyan)" />
-              <h3 style={{ fontSize: "15px", fontWeight: 600 }}>Monitored ATS & Career Sources</h3>
+              <Globe size={18} color="var(--accent-indigo)" />
+              <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>Monitored ATS & Career Sources</h3>
             </div>
             <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
               {sources?.length ?? 0} endpoints active
