@@ -37,10 +37,10 @@ export const AnalyticsView: React.FC = () => {
   ];
 
   const atsData = [
-    { name: "Greenhouse", value: 45, color: "#10b981" },
-    { name: "Ashby", value: 30, color: "#06b6d4" },
-    { name: "Lever", value: 20, color: "#8b5cf6" },
-    { name: "Direct Career", value: 15, color: "#f59e0b" },
+    { name: "Greenhouse", value: 45, color: "#4f46e5" },
+    { name: "Ashby", value: 30, color: "#2563eb" },
+    { name: "Lever", value: 20, color: "#7c3aed" },
+    { name: "Direct Career", value: 15, color: "#d97706" },
   ];
 
   const salaryRanges = salaryData?.ranges || [
@@ -53,7 +53,7 @@ export const AnalyticsView: React.FC = () => {
   return (
     <div className="page-container" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       <div>
-        <h2 style={{ fontSize: "16px", fontWeight: 700 }}>Market & Compensation Intelligence</h2>
+        <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Market & Compensation Intelligence</h2>
         <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
           Aggregated insights derived exclusively from verified employer career pages and public ATS APIs.
         </div>
@@ -63,29 +63,31 @@ export const AnalyticsView: React.FC = () => {
         {/* Top In-Demand Skills */}
         <div className="glass-panel" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <TrendingUp size={18} color="var(--accent-cyan)" />
-            <h3 style={{ fontSize: "14px", fontWeight: 600 }}>Top In-Demand Skills</h3>
+            <TrendingUp size={18} color="var(--accent-indigo)" />
+            <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>Top In-Demand Skills</h3>
           </div>
 
           <div style={{ height: "280px", width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={skillsChart} layout="vertical" margin={{ left: 20, right: 20, top: 10, bottom: 10 }}>
-                <XAxis type="number" stroke="var(--text-muted)" fontSize={11} />
-                <YAxis dataKey="name" type="category" stroke="var(--text-secondary)" fontSize={12} width={80} />
+              <BarChart data={skillsChart} layout="vertical" margin={{ left: 10, right: 20, top: 10, bottom: 10 }}>
+                <XAxis type="number" stroke="var(--border-subtle)" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
+                <YAxis dataKey="name" type="category" stroke="var(--border-subtle)" tick={{ fill: "var(--text-primary)", fontSize: 12, fontWeight: 500 }} width={85} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "var(--bg-card)",
                     borderColor: "var(--border-subtle)",
                     borderRadius: "8px",
-                    color: "#fff",
+                    boxShadow: "var(--shadow-md)",
                     fontSize: "12px",
                   }}
+                  itemStyle={{ color: "var(--text-primary)", fontSize: "12px" }}
+                  labelStyle={{ color: "var(--text-primary)", fontWeight: 600, fontSize: "12px", marginBottom: "4px" }}
                 />
                 <Bar dataKey="count" fill="url(#brandGradient)" radius={[0, 4, 4, 0]} />
                 <defs>
                   <linearGradient id="brandGradient" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#06b6d4" />
-                    <stop offset="100%" stopColor="#3b82f6" />
+                    <stop offset="0%" stopColor="#4f46e5" />
+                    <stop offset="100%" stopColor="#2563eb" />
                   </linearGradient>
                 </defs>
               </BarChart>
@@ -97,7 +99,7 @@ export const AnalyticsView: React.FC = () => {
         <div className="glass-panel" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <PieIcon size={18} color="var(--accent-purple)" />
-            <h3 style={{ fontSize: "14px", fontWeight: 600 }}>Source & ATS Platform Breakdown</h3>
+            <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>Source & ATS Platform Breakdown</h3>
           </div>
 
           <div style={{ height: "280px", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -121,9 +123,11 @@ export const AnalyticsView: React.FC = () => {
                     backgroundColor: "var(--bg-card)",
                     borderColor: "var(--border-subtle)",
                     borderRadius: "8px",
-                    color: "#fff",
+                    boxShadow: "var(--shadow-md)",
                     fontSize: "12px",
                   }}
+                  itemStyle={{ color: "var(--text-primary)", fontSize: "12px" }}
+                  labelStyle={{ color: "var(--text-primary)", fontWeight: 600, fontSize: "12px", marginBottom: "4px" }}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -142,28 +146,30 @@ export const AnalyticsView: React.FC = () => {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <BarChart3 size={18} color="var(--accent-emerald)" />
-            <h3 style={{ fontSize: "14px", fontWeight: 600 }}>Salary Ranges by Seniority (USD in Thousands)</h3>
+            <BarChart3 size={18} color="var(--accent-indigo)" />
+            <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>Salary Ranges by Seniority (USD in Thousands)</h3>
           </div>
 
           <div style={{ height: "260px", width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={salaryRanges} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <XAxis dataKey="exp" stroke="var(--text-secondary)" fontSize={12} />
-                <YAxis stroke="var(--text-muted)" fontSize={11} tickFormatter={(val) => `$${val}k`} />
+              <BarChart data={salaryRanges} margin={{ top: 20, right: 30, left: 10, bottom: 5 }}>
+                <XAxis dataKey="exp" stroke="var(--border-subtle)" tick={{ fill: "var(--text-primary)", fontSize: 12, fontWeight: 500 }} />
+                <YAxis stroke="var(--border-subtle)" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} tickFormatter={(val) => `$${val}k`} />
                 <Tooltip
                   formatter={(val: any) => [`$${val}k`, "Salary"]}
                   contentStyle={{
                     backgroundColor: "var(--bg-card)",
                     borderColor: "var(--border-subtle)",
                     borderRadius: "8px",
-                    color: "#fff",
+                    boxShadow: "var(--shadow-md)",
                     fontSize: "12px",
                   }}
+                  itemStyle={{ color: "var(--text-primary)", fontSize: "12px" }}
+                  labelStyle={{ color: "var(--text-primary)", fontWeight: 600, fontSize: "12px", marginBottom: "4px" }}
                 />
                 <Bar dataKey="min" fill="#3b82f6" name="Base Min" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="avg" fill="#10b981" name="Market Avg" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="max" fill="#8b5cf6" name="Top Tier" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avg" fill="#4f46e5" name="Market Avg" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="max" fill="#7c3aed" name="Top Tier" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
