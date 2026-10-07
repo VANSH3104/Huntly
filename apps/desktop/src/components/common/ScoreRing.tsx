@@ -23,30 +23,24 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
   const strokeDashoffset = circumference - (normalized / 100) * circumference;
 
   // Curated color based on score
-  let strokeColor = "#64748b"; // muted
-  let glowColor = "rgba(100, 116, 139, 0.2)";
-  let textColor = "#94a3b8";
+  let strokeColor = "#64748b";
+  let textColor = "#475569";
 
   if (normalized >= 85) {
-    strokeColor = "#10b981"; // emerald
-    glowColor = "rgba(16, 185, 129, 0.4)";
-    textColor = "#34d399";
+    strokeColor = "#2563eb"; // sapphire blue
+    textColor = "#1d4ed8";
   } else if (normalized >= 70) {
-    strokeColor = "#06b6d4"; // cyan
-    glowColor = "rgba(6, 182, 212, 0.4)";
-    textColor = "#38bdf8";
+    strokeColor = "#4f46e5"; // indigo
+    textColor = "#4338ca";
   } else if (normalized >= 50) {
-    strokeColor = "#3b82f6"; // blue
-    glowColor = "rgba(59, 130, 246, 0.4)";
-    textColor = "#60a5fa";
+    strokeColor = "#0284c7"; // sky
+    textColor = "#0369a1";
   } else if (normalized >= 30) {
-    strokeColor = "#f59e0b"; // amber
-    glowColor = "rgba(245, 158, 11, 0.4)";
-    textColor = "#fbbf24";
+    strokeColor = "#d97706"; // amber
+    textColor = "#b45309";
   } else {
-    strokeColor = "#f43f5e"; // rose
-    glowColor = "rgba(244, 63, 94, 0.4)";
-    textColor = "#fb7185";
+    strokeColor = "#e11d48"; // rose
+    textColor = "#be123c";
   }
 
   return (
@@ -64,14 +58,13 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
         height={size}
         style={{
           transform: "rotate(-90deg)",
-          filter: `drop-shadow(0 0 6px ${glowColor})`,
         }}
       >
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255, 255, 255, 0.08)"
+          stroke="var(--border-subtle)"
           strokeWidth={strokeWidth}
           fill="transparent"
         />
