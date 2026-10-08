@@ -26,7 +26,7 @@ export const Sidebar: React.FC = () => {
   const navItems: NavItem[] = [
     { id: "dashboard", label: "Intelligence", icon: Cpu },
     { id: "jobs", label: "Job Feed", icon: Briefcase },
-    { id: "radar", label: "Founder Radar", icon: Radio, badge: "LIVE" },
+    { id: "radar", label: "Tech & AI Radar", icon: Sparkles, badge: "LIVE" },
     { id: "discovery", label: "Discovery Engine", icon: Compass },
     { id: "applications", label: "Applications", icon: CheckSquare },
     { id: "resume", label: "Resume Studio", icon: FileText },

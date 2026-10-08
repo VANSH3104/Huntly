@@ -19,6 +19,7 @@ import { analyticsRouter } from "./routes/analytics.js";
 import { settingsRouter } from "./routes/settings.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { aiRouter } from "./routes/ai.js";
+import { intelRouter } from "./routes/intel.js";
 
 // Workers
 import { WorkerOrchestrator } from "./workers/orchestrator.js";
@@ -55,6 +56,7 @@ async function bootstrap(): Promise<void> {
   app.use("/api/settings", settingsRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/ai", aiRouter);
+  app.use("/api/intel", intelRouter);
 
   // Global error handler
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

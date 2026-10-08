@@ -290,4 +290,47 @@ export const api = {
     testLlm: (config?: any) =>
       request<any>("/settings/test-llm", { method: "POST", body: JSON.stringify(config || {}) }),
   },
+
+  // Tech & AI Intelligence Radar
+  intel: {
+    getFeed: (params: { category?: string; q?: string; force?: boolean } = {}) => {
+      const query = new URLSearchParams();
+      if (params.category && params.category !== "all") query.set("category", params.category);
+      if (params.q) query.set("q", params.q);
+      if (params.force) query.set("force", "true");
+      return request<{
+        success: boolean;
+        count: number;
+        feed: Array<{
+          id: string;
+          title: string;
+          source: string;
+          category: string;
+          url: string;
+          score: number;
+          commentsCount: number;
+          readTime: string;
+          publishedAt: string;
+          executiveSummary: string;
+          technicalHighlights: string[];
+          practicalImpact: string;
+          keyConcepts: string[];
+        }>;
+        lastUpdated: string;
+      }>(`/intel/feed?${query.toString()}`);
+    },
+    refresh: () => request<{ success: boolean; count: number; feed: any[] }>("/intel/refresh", { method: "POST" }),
+    deepDive: (params: { title: string; summary: string; url: string }) =>
+      request<{
+        success: boolean;
+        title: string;
+        architectureOverview: string;
+        markdownContent: string;
+        codeExample?: string;
+        takeaways: string[];
+      }>("/intel/deep-dive", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+  },
 };

@@ -159,7 +159,7 @@ export class GeminiClient {
     return result.response.text().trim();
   }
 
-  private parseJsonFromText<T = unknown>(text: string): T {
+  public parseJsonFromText<T = unknown>(text: string): T {
     // 1. Try markdown code block
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
     if (jsonMatch?.[1]) {
