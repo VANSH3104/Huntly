@@ -407,6 +407,98 @@ Return ONLY valid JSON with this structure:
       ];
     }
   }
+
+  /**
+   * Generates high-converting Cold DM, Cold Email, and LinkedIn note for founders / recruiters
+   */
+  async generateColdOutreach(params: {
+    jobTitle: string;
+    companyName: string;
+    platform: string;
+    jobDescription: string;
+    founderHandle?: string;
+    contactEmail?: string;
+    candidateResumeText?: string;
+    candidateSkills?: string[];
+  }): Promise<{
+    twitterDM: string;
+    coldEmail: { subject: string; body: string };
+    linkedInNote: string;
+    keyHook: string;
+  }> {
+    const prompt = `
+You are a world-class startup talent connector and cold outreach specialist.
+A candidate wants to reach out directly to the founder / engineering hiring manager for this opportunity.
+
+OPPORTUNITY DETAILS:
+- Company: ${params.companyName}
+- Role: ${params.jobTitle}
+- Platform: ${params.platform.toUpperCase()}
+- Founder/Contact Handle: ${params.founderHandle || "Founder / Hiring Team"}
+- Contact Email: ${params.contactEmail || "N/A"}
+- Job Description/Post Snippet:
+"""
+${params.jobDescription.slice(0, 1000)}
+"""
+
+CANDIDATE BACKGROUND:
+- Top Skills: ${(params.candidateSkills || []).slice(0, 10).join(", ") || "TypeScript, Node.js, React, Python, PostgreSQL"}
+- Resume Context:
+"""
+${(params.candidateResumeText || "").slice(0, 1200) || "Experienced software engineer with strong full-stack and systems background."}
+"""
+
+YOUR TASK:
+Generate 3 tailored, punchy, high-response outreach templates:
+1. "twitterDM": Max 260 characters. Punchy, authentic, references what they're building, mentions candidate's exact relevant skill/proof of work, asks a low-friction question (e.g. "Open to a quick 5-min chat or demo?").
+2. "coldEmail": High-converting 3-paragraph email with a curiosity-driven subject line, mentioning the specific startup mission, candidate's concrete experience/projects, and clear call-to-action.
+3. "linkedInNote": Max 280 characters for a personalized connection invitation.
+4. "keyHook": A 1-sentence explanation of why this message will grab their attention.
+
+Return ONLY valid JSON matching this schema:
+{
+  "twitterDM": "<text>",
+  "coldEmail": {
+    "subject": "<subject>",
+    "body": "<email body>"
+  },
+  "linkedInNote": "<text>",
+  "keyHook": "<1 sentence hook>"
+}
+`;
+
+    try {
+      const text = await this.generateText(prompt, "You are an elite cold outreach copywriter. Output ONLY valid JSON.");
+      const parsed = this.parseJsonFromText<{
+        twitterDM: string;
+        coldEmail: { subject: string; body: string };
+        linkedInNote: string;
+        keyHook: string;
+      }>(text);
+
+      return {
+        twitterDM: parsed.twitterDM || `Hey ${params.founderHandle || "there"}, saw your post about building ${params.companyName}. Built similar full-stack systems with ${params.candidateSkills?.[0] || "TypeScript"}. Would love to help you scale—mind if I send over my portfolio?`,
+        coldEmail: parsed.coldEmail || {
+          subject: `${params.jobTitle} at ${params.companyName} — Quick Intro`,
+          body: `Hi ${params.companyName} team,\n\nSaw your opening for ${params.jobTitle} and loved what you're building. With my background in ${params.candidateSkills?.slice(0, 3).join(", ") || "full-stack development"}, I'd love to contribute immediately to your roadmap.\n\nLooking forward to connecting!`,
+        },
+        linkedInNote: parsed.linkedInNote || `Hi! Came across ${params.companyName}'s work on ${params.jobTitle}. Passionate about your mission and would love to connect!`,
+        keyHook: parsed.keyHook || "Directly links candidate skills to company's stated tech stack.",
+      };
+    } catch (err) {
+      console.error("[Gemini] Failed to generate cold outreach:", err);
+      return {
+        twitterDM: `Hey ${params.founderHandle || "there"}, saw your post about hiring for ${params.companyName}. Have experience in ${params.candidateSkills?.[0] || "TypeScript/React"}. Would love to chat!`,
+        coldEmail: {
+          subject: `${params.jobTitle} Application — ${params.companyName}`,
+          body: `Hi,\n\nI came across your hiring post for ${params.jobTitle} at ${params.companyName}. Given my background in ${params.candidateSkills?.slice(0, 3).join(", ") || "modern web systems"}, I'd love to explore how I can add value to your team.\n\nBest regards,`,
+        },
+        linkedInNote: `Hi! Saw the ${params.jobTitle} opening at ${params.companyName}. Would love to connect!`,
+        keyHook: "Concise direct outreach referencing the role.",
+      };
+    }
+  }
 }
 
 export const LLMClient = GeminiClient;
+

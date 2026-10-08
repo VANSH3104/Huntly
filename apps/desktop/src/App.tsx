@@ -8,6 +8,7 @@ import { JobDetailModal } from "./views/JobDetailModal";
 // Views
 import { DashboardView } from "./views/DashboardView";
 import { JobsView } from "./views/JobsView";
+import { FounderRadarView } from "./views/FounderRadarView";
 import { DiscoveryView } from "./views/DiscoveryView";
 import { ApplicationsView } from "./views/ApplicationsView";
 import { ResumeStudioView } from "./views/ResumeStudioView";
@@ -23,6 +24,8 @@ export const App: React.FC = () => {
         return <DashboardView />;
       case "jobs":
         return <JobsView />;
+      case "radar":
+        return <FounderRadarView />;
       case "discovery":
         return <DiscoveryView />;
       case "applications":

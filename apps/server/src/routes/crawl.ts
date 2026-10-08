@@ -257,6 +257,33 @@ crawlRouter.post("/yc", async (req, res, next) => {
   }
 });
 
+// POST /api/crawl/hn — scrape live Hacker News "Who is Hiring?" monthly thread
+crawlRouter.post("/hn", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      keywords: z.string().optional(),
+      role: z.string().optional(),
+      limit: z.coerce.number().optional().default(30),
+    });
+    const { keywords, role, limit } = schema.parse(req.body);
+
+    const items = await socialAndYCScraper.scrapeHNJobs({
+      keywords,
+      role,
+      limit,
+    });
+    const result = await socialAndYCScraper.ingestJobs(items);
+
+    res.json({
+      success: true,
+      scraped: items.length,
+      ...result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/crawl/discover — discover live career pages via Google + LinkedIn + Twitter + YC for given keywords
 crawlRouter.post("/discover", async (req, res, next) => {
   try {

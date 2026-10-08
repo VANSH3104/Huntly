@@ -13,6 +13,7 @@ import type {
 export type NavTab =
   | "dashboard"
   | "jobs"
+  | "radar"
   | "applications"
   | "discovery"
   | "resume"

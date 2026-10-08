@@ -351,6 +351,97 @@ aiRouter.post("/agent-search", async (req, res, next) => {
   }
 });
 
+// POST /api/ai/outreach-draft — generate high-converting cold outreach for Twitter/YC/HN
+aiRouter.post("/outreach-draft", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      jobId: z.string().optional(),
+      jobTitle: z.string().optional(),
+      companyName: z.string().optional(),
+      platform: z.string().optional().default("twitter"),
+      jobDescription: z.string().optional(),
+      founderHandle: z.string().optional(),
+      contactEmail: z.string().optional(),
+      resumeId: z.string().optional(),
+    });
+    const body = schema.parse(req.body);
+
+    const db = getDatabase();
+
+    let jobTitle = body.jobTitle || "Software Engineer";
+    let companyName = body.companyName || "Tech Startup";
+    let description = body.jobDescription || "";
+    let platform = body.platform || "twitter";
+    let founderHandle = body.founderHandle;
+    let contactEmail = body.contactEmail;
+
+    if (body.jobId) {
+      const [job] = await db.select().from(jobs).where(eq(jobs.id, body.jobId)).limit(1);
+      if (job) {
+        jobTitle = job.title;
+        description = job.description;
+        const [comp] = await db.select().from(companies).where(eq(companies.id, job.companyId)).limit(1);
+        if (comp) companyName = comp.name;
+
+        // Parse contact metadata from locationJson
+        if (job.locationJson) {
+          try {
+            const loc = JSON.parse(job.locationJson);
+            if (loc.founderHandle) founderHandle = loc.founderHandle;
+            if (loc.contactEmail) contactEmail = loc.contactEmail;
+            if (loc.platform) platform = loc.platform;
+          } catch {}
+        }
+      }
+    }
+
+    // Load active resume for personalization
+    let resumeId = body.resumeId;
+    if (!resumeId) {
+      const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
+      if (activeResume) resumeId = activeResume.id;
+    }
+
+    let candidateResumeText = "";
+    let candidateSkills: string[] = [];
+
+    if (resumeId) {
+      const [resume] = await db.select().from(resumes).where(eq(resumes.id, resumeId)).limit(1);
+      if (resume) {
+        candidateResumeText = resume.latex || "";
+        try {
+          const parsed = JSON.parse(resume.parsedJson || "{}");
+          candidateSkills = parsed.skills?.technical || parsed.skills?.tools || [];
+        } catch {}
+      }
+    }
+
+    const gemini = new GeminiClient();
+    const result = await gemini.generateColdOutreach({
+      jobTitle,
+      companyName,
+      platform,
+      jobDescription: description,
+      founderHandle,
+      contactEmail,
+      candidateResumeText,
+      candidateSkills,
+    });
+
+    res.json({
+      success: true,
+      companyName,
+      jobTitle,
+      platform,
+      founderHandle,
+      contactEmail,
+      ...result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function safeParseJSON<T>(val: string | null | undefined, fallback: T): T {
   if (!val) return fallback;
   try { return JSON.parse(val) as T; } catch { return fallback; }

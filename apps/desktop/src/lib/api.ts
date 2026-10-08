@@ -143,6 +143,31 @@ export const api = {
         method: "POST",
         body: JSON.stringify(params),
       }),
+    generateOutreach: (params: {
+      jobId?: string;
+      jobTitle?: string;
+      companyName?: string;
+      platform?: string;
+      jobDescription?: string;
+      founderHandle?: string;
+      contactEmail?: string;
+      resumeId?: string;
+    }) =>
+      request<{
+        success: boolean;
+        companyName: string;
+        jobTitle: string;
+        platform: string;
+        founderHandle?: string;
+        contactEmail?: string;
+        twitterDM: string;
+        coldEmail: { subject: string; body: string };
+        linkedInNote: string;
+        keyHook: string;
+      }>("/ai/outreach-draft", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
   },
 
   // Companies
@@ -182,12 +207,17 @@ export const api = {
     scrapeLinkedIn: (params: { keywords: string; location?: string; remoteOnly?: boolean }) =>
       request<any>("/crawl/linkedin", { method: "POST", body: JSON.stringify(params) }),
     scrapeTwitter: (params: { keywords: string; location?: string; limit?: number }) =>
-      request<{ success: boolean; found: number; added: number; jobs: any[] }>("/crawl/twitter", {
+      request<{ success: boolean; found?: number; scraped?: number; added: number; jobs?: any[] }>("/crawl/twitter", {
         method: "POST",
         body: JSON.stringify(params),
       }),
     scrapeYC: (params: { keywords?: string; role?: string; limit?: number }) =>
-      request<{ success: boolean; found: number; added: number; jobs: any[] }>("/crawl/yc", {
+      request<{ success: boolean; found?: number; scraped?: number; added: number; jobs?: any[] }>("/crawl/yc", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+    scrapeHN: (params: { keywords?: string; role?: string; limit?: number }) =>
+      request<{ success: boolean; found?: number; scraped?: number; added: number; jobs?: any[] }>("/crawl/hn", {
         method: "POST",
         body: JSON.stringify(params),
       }),

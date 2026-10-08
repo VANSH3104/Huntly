@@ -4,6 +4,7 @@ import type { NavTab } from "../../types";
 import {
   Cpu,
   Briefcase,
+  Radio,
   Compass,
   FileText,
   CheckSquare,
@@ -25,6 +26,7 @@ export const Sidebar: React.FC = () => {
   const navItems: NavItem[] = [
     { id: "dashboard", label: "Intelligence", icon: Cpu },
     { id: "jobs", label: "Job Feed", icon: Briefcase },
+    { id: "radar", label: "Founder Radar", icon: Radio, badge: "LIVE" },
     { id: "discovery", label: "Discovery Engine", icon: Compass },
     { id: "applications", label: "Applications", icon: CheckSquare },
     { id: "resume", label: "Resume Studio", icon: FileText },
