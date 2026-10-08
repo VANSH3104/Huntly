@@ -47,6 +47,7 @@ const defaultFilters: JobFilterState = {
   status: "active",
   sortBy: "matchScore",
   sortOrder: "desc",
+  postedWithin: "all",
 };
 
 const getInitialTheme = (): ThemeId => {
