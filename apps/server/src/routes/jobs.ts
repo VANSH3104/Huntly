@@ -24,6 +24,7 @@ const JobFilterSchema = z.object({
   sort: z.string().optional(),
   sortBy: z.string().optional(),
   sortOrder: z.string().optional(),
+  postedWithin: z.enum(["4h", "9h", "24h", "3d", "7d", "30d"]).optional(),
   tab: z.enum(["recommended", "new", "all", "saved", "applied"]).optional(),
 });
 
@@ -133,6 +134,23 @@ jobsRouter.get("/", async (req, res, next) => {
       conditions.push(
         sql`(json_extract(${jobs.locationJson}, '$.remote') = 1 OR json_extract(${jobs.locationJson}, '$.remote') = true OR lower(${jobs.locationJson}) LIKE '%remote%')`
       );
+    }
+
+    // Time Posted Freshness filter (4h, 9h, 24h, 3d, 7d, 30d)
+    if (filter.postedWithin) {
+      const now = Date.now();
+      let msAgo = 0;
+      if (filter.postedWithin === "4h") msAgo = 4 * 60 * 60 * 1000;
+      else if (filter.postedWithin === "9h") msAgo = 9 * 60 * 60 * 1000;
+      else if (filter.postedWithin === "24h") msAgo = 24 * 60 * 60 * 1000;
+      else if (filter.postedWithin === "3d") msAgo = 3 * 24 * 60 * 60 * 1000;
+      else if (filter.postedWithin === "7d") msAgo = 7 * 24 * 60 * 60 * 1000;
+      else if (filter.postedWithin === "30d") msAgo = 30 * 24 * 60 * 60 * 1000;
+
+      if (msAgo > 0) {
+        const minTimestamp = now - msAgo;
+        conditions.push(sql`COALESCE(${jobs.postedAt}, ${jobs.firstSeenAt}) >= ${minTimestamp}`);
+      }
     }
 
     // ATS / Platform filter (supports Greenhouse, Lever, Ashby, Workday, and YC Startups)
