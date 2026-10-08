@@ -173,8 +173,17 @@ export const TechRadarView: React.FC = () => {
   const featuredStories = feed.slice(0, 6);
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: "1400px", margin: "0 auto" }}>
-      {/* Top Banner Header */}
+    <div
+      style={{
+        flex: 1,
+        height: "100%",
+        overflowY: "auto",
+        padding: "28px 32px 60px 32px",
+        width: "100%",
+      }}
+    >
+      <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
+        {/* Top Banner Header */}
       <div
         style={{
           background: "var(--bg-card)",
@@ -999,6 +1008,7 @@ export const TechRadarView: React.FC = () => {
           </motion.div>
         </div>
       )}
+      </div>
     </div>
   );
 };
