@@ -28,6 +28,14 @@ import {
   Rocket,
   X,
   RefreshCw,
+  Bot,
+  TrendingUp,
+  Award,
+  ShieldCheck,
+  Star,
+  Clock,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 
 export const JobsView: React.FC = () => {
@@ -54,10 +62,65 @@ export const JobsView: React.FC = () => {
   >([]);
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all");
 
+  // Agentic Deep Search & Company Intelligence state
+  const [showAgentSearch, setShowAgentSearch] = React.useState(false);
+  const [agentQuery, setAgentQuery] = React.useState("");
+  const [isAgentSearching, setIsAgentSearching] = React.useState(false);
+  const [agentSearchData, setAgentSearchData] = React.useState<any | null>(null);
+  const [agentSearchStepIndex, setAgentSearchStepIndex] = React.useState(0);
+  const [agentSearchError, setAgentSearchError] = React.useState<string | null>(null);
+
+  const handleRunAgentSearch = async (overrideQuery?: string) => {
+    const queryToUse = (overrideQuery || agentQuery).trim();
+    if (!queryToUse) return;
+
+    try {
+      setIsAgentSearching(true);
+      setAgentSearchError(null);
+      setAgentSearchStepIndex(1);
+
+      const step1 = setTimeout(() => setAgentSearchStepIndex(2), 1000);
+      const step2 = setTimeout(() => setAgentSearchStepIndex(3), 3000);
+      const step3 = setTimeout(() => setAgentSearchStepIndex(4), 5500);
+
+      const res = await api.ai.agentSearch({
+        query: queryToUse,
+        limit: 12,
+      });
+
+      clearTimeout(step1);
+      clearTimeout(step2);
+      clearTimeout(step3);
+
+      setAgentSearchData(res);
+      setAgentSearchStepIndex(5);
+    } catch (err: any) {
+      setAgentSearchError(err.message || "Failed to execute agent search");
+    } finally {
+      setIsAgentSearching(false);
+    }
+  };
+
+  const [savedAgentJobIds, setSavedAgentJobIds] = React.useState<Set<string>>(new Set());
+
+  const handleSaveAgentJob = async (jobId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await api.applications.create({
+        jobId,
+        status: "saved",
+        notes: "Saved from Agent Deep Search",
+      });
+      setSavedAgentJobIds((prev) => new Set([...prev, jobId]));
+    } catch {
+      setSavedAgentJobIds((prev) => new Set([...prev, jobId]));
+    }
+  };
+
   // Reset page to 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [filters.search, filters.role, filters.location, filters.remoteOnly, filters.minScore, filters.ats, filters.status, filters.sortBy]);
+  }, [filters.search, filters.role, filters.location, filters.remoteOnly, filters.minScore, filters.ats, filters.status, filters.sortBy, filters.postedWithin]);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["jobs", filters, currentPage, pageSize],
@@ -72,6 +135,7 @@ export const JobsView: React.FC = () => {
         status: filters.status,
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
+        postedWithin: filters.postedWithin !== "all" ? filters.postedWithin : undefined,
         page: currentPage,
         limit: pageSize,
       }),
@@ -315,6 +379,22 @@ export const JobsView: React.FC = () => {
           <option value="workday">Workday</option>
         </select>
 
+        {/* Time Posted Freshness Filter */}
+        <select
+          value={filters.postedWithin || "all"}
+          onChange={(e) => setFilters({ postedWithin: e.target.value as any })}
+          style={{ width: "140px" }}
+          title="Filter by when the position was posted"
+        >
+          <option value="all">🕒 Any Time</option>
+          <option value="4h">⚡ Past 4 Hours</option>
+          <option value="9h">⏱️ Past 9 Hours</option>
+          <option value="24h">📅 Past 24 Hours</option>
+          <option value="3d">🗓️ Past 3 Days</option>
+          <option value="7d">📆 Past Week</option>
+          <option value="30d">🗓️ Past Month</option>
+        </select>
+
         {/* Remote toggle */}
         <label
           style={{
@@ -354,6 +434,40 @@ export const JobsView: React.FC = () => {
 
         {/* Actions Cluster */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginLeft: "auto" }}>
+          {/* Agent Deep Search & Intelligence Toggle */}
+          <button
+            className={showAgentSearch ? "btn btn-primary" : "btn btn-secondary"}
+            onClick={() => setShowAgentSearch(!showAgentSearch)}
+            style={{
+              fontSize: "12px",
+              padding: "7px 13px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              borderColor: showAgentSearch ? "rgba(168, 85, 247, 0.7)" : "rgba(168, 85, 247, 0.35)",
+              backgroundColor: showAgentSearch ? "rgba(168, 85, 247, 0.22)" : "rgba(168, 85, 247, 0.08)",
+              color: "#c084fc",
+              fontWeight: 600,
+            }}
+            title="Agentic Search: Live web research on company reputation, Glassdoor & salary benchmarks"
+          >
+            <Bot size={15} color="#c084fc" />
+            <span>Agent Search</span>
+            <span
+              style={{
+                fontSize: "9px",
+                textTransform: "uppercase",
+                padding: "1px 5px",
+                borderRadius: "8px",
+                backgroundColor: "rgba(168, 85, 247, 0.35)",
+                color: "#e9d5ff",
+                letterSpacing: "0.5px",
+              }}
+            >
+              Web+AI
+            </span>
+          </button>
+
           {/* AI Combinations Toggle */}
           <button
             className="btn btn-secondary"
@@ -473,6 +587,552 @@ export const JobsView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Agentic Deep Search & Company Intelligence Panel */}
+      {showAgentSearch && (
+        <div
+          className="glass-panel"
+          style={{
+            padding: "22px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "18px",
+            backgroundColor: "var(--bg-card)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "14px",
+            boxShadow: "var(--shadow-md)",
+            position: "relative",
+          }}
+        >
+          {/* Panel Header */}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(124, 58, 237, 0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--accent-purple, #7c3aed)",
+                  border: "1px solid rgba(124, 58, 237, 0.25)",
+                }}
+              >
+                <Bot size={22} />
+              </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.2px" }}>
+                    Agentic Deep Search & Company Intelligence
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                      backgroundColor: "rgba(124, 58, 237, 0.1)",
+                      color: "var(--accent-purple, #7c3aed)",
+                      fontWeight: 600,
+                      border: "1px solid rgba(124, 58, 237, 0.2)",
+                    }}
+                  >
+                    Live Web + Levels.fyi + Glassdoor
+                  </span>
+                </div>
+                <p style={{ margin: "3px 0 0", fontSize: "12px", color: "var(--text-secondary)" }}>
+                  Search by company reputation, Glassdoor rating & salary benchmarks across all positions.
+                </p>
+              </div>
+            </div>
+
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowAgentSearch(false)}
+              style={{ padding: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              <X size={15} />
+            </button>
+          </div>
+
+          {/* Search Input & Action */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleRunAgentSearch();
+            }}
+            style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+          >
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <Search
+                  size={17}
+                  color="var(--accent-purple, #7c3aed)"
+                  style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }}
+                />
+                <input
+                  type="text"
+                  placeholder="e.g. Find reputed tech companies paying high compensation for Backend / Distributed Systems in India or Remote..."
+                  value={agentQuery}
+                  onChange={(e) => setAgentQuery(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px 10px 38px",
+                    fontSize: "13px",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--bg-input)",
+                    border: "1px solid var(--border-subtle)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+                {agentQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setAgentQuery("")}
+                    style={{
+                      position: "absolute",
+                      right: "10px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "var(--text-muted)",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "2px",
+                    }}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isAgentSearching || !agentQuery.trim()}
+                className="btn btn-primary"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  padding: "10px 20px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isAgentSearching ? (
+                  <>
+                    <RefreshCw size={14} className="spin-animation" />
+                    <span>Researching...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap size={14} />
+                    <span>Run Deep Search</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Quick Presets */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", paddingTop: "2px" }}>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 500 }}>Quick Presets:</span>
+              {[
+                { label: "⭐ Reputed Companies (High Pay)", query: "reputed companies paying high compensation for backend engineer" },
+                { label: "💰 Senior Backend (> ₹35 LPA / $150k)", query: "senior backend or distributed systems paying above 35 LPA with good engineering culture" },
+                { label: "🚀 High-Growth YC Unicorns", query: "well-funded YC startups or unicorn companies hiring remote full stack or frontend" },
+                { label: "🧠 AI / ML Infrastructure", query: "top companies hiring AI engineer or machine learning systems with competitive salary" },
+              ].map((preset, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    setAgentQuery(preset.query);
+                    handleRunAgentSearch(preset.query);
+                  }}
+                  style={{
+                    fontSize: "11px",
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    backgroundColor: "var(--bg-secondary)",
+                    border: "1px solid var(--border-subtle)",
+                    color: "var(--text-primary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </form>
+
+          {/* Stepper indicator when researching */}
+          {isAgentSearching && (
+            <div
+              style={{
+                padding: "14px 16px",
+                borderRadius: "10px",
+                backgroundColor: "var(--bg-secondary)",
+                border: "1px solid var(--border-subtle)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-purple, #7c3aed)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Sparkles size={14} /> Agent Execution Graph in Progress
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Live web queries & LLM synthesis...</span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px" }}>
+                {[
+                  { step: 1, title: "1. Intent & Criteria Parsing", desc: "Deconstructing roles & tier targets" },
+                  { step: 2, title: "2. Database Candidate Screening", desc: "Screening 3,000+ local positions" },
+                  { step: 3, title: "3. Live Web Research", desc: "Levels.fyi, Glassdoor & company reputation" },
+                  { step: 4, title: "4. Multi-Criteria Ranking", desc: "Scoring fit, culture & expected pay" },
+                ].map((s) => {
+                  const isCurrent = agentSearchStepIndex === s.step;
+                  const isDone = agentSearchStepIndex > s.step;
+                  return (
+                    <div
+                      key={s.step}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        backgroundColor: isCurrent ? "rgba(124, 58, 237, 0.1)" : isDone ? "rgba(16, 185, 129, 0.1)" : "var(--bg-card)",
+                        border: isCurrent ? "1px solid rgba(124, 58, 237, 0.3)" : isDone ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid var(--border-subtle)",
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: isCurrent ? "var(--accent-purple, #7c3aed)" : isDone ? "var(--accent-emerald, #059669)" : "var(--text-muted)" }}>
+                        {isDone ? "✓ " : isCurrent ? "⚡ " : ""}{s.title}
+                      </div>
+                      <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>{s.desc}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {agentSearchError && (
+            <div
+              style={{
+                padding: "12px 16px",
+                borderRadius: "8px",
+                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.25)",
+                color: "var(--accent-rose, #e11d48)",
+                fontSize: "12px",
+              }}
+            >
+              {agentSearchError}
+            </div>
+          )}
+
+          {/* Agent Results Container */}
+          {agentSearchData && agentSearchData.results?.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "4px" }}>
+              {/* Summary Bar */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  padding: "10px 16px",
+                  borderRadius: "8px",
+                  backgroundColor: "var(--bg-secondary)",
+                  border: "1px solid var(--border-subtle)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                    <strong>Evaluated:</strong> {agentSearchData.stats?.totalEvaluatedInDb} jobs across {agentSearchData.stats?.uniqueCompaniesResearched} employers
+                  </div>
+                  {agentSearchData.parsedIntent?.compensationExpectation && (
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        backgroundColor: "rgba(16, 185, 129, 0.12)",
+                        color: "var(--accent-emerald, #059669)",
+                        border: "1px solid rgba(16, 185, 129, 0.25)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Target Pay: {agentSearchData.parsedIntent.compensationExpectation}
+                    </span>
+                  )}
+                  {agentSearchData.parsedIntent?.reputationTier && (
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        backgroundColor: "rgba(124, 58, 237, 0.1)",
+                        color: "var(--accent-purple, #7c3aed)",
+                        border: "1px solid rgba(124, 58, 237, 0.2)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Tier: {agentSearchData.parsedIntent.reputationTier}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAgentSearchData(null)}
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--text-muted)",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Clear Results
+                </button>
+              </div>
+
+              {/* Cards Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
+                {agentSearchData.results.map((item: any, idx: number) => {
+                  return (
+                    <div
+                      key={item.id || idx}
+                      className="glass-panel"
+                      style={{
+                        padding: "16px 18px",
+                        borderRadius: "10px",
+                        backgroundColor: "var(--bg-card)",
+                        border: "1px solid var(--border-subtle)",
+                        boxShadow: "var(--shadow-sm)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                      }}
+                    >
+                      {/* Top Row: Title, Company, Score, Tier */}
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+                        <div style={{ flex: 1, minWidth: "260px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <h4
+                              onClick={() => setSelectedJobId(item.id)}
+                              style={{
+                                margin: 0,
+                                fontSize: "15px",
+                                fontWeight: 700,
+                                color: "var(--text-primary)",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {item.title}
+                            </h4>
+                            {/* Tier Badge */}
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                fontWeight: 600,
+                                backgroundColor:
+                                  item.tierBadgeColor === "emerald"
+                                    ? "rgba(16, 185, 129, 0.12)"
+                                    : item.tierBadgeColor === "purple"
+                                    ? "rgba(124, 58, 237, 0.12)"
+                                    : item.tierBadgeColor === "rose"
+                                    ? "rgba(225, 29, 72, 0.12)"
+                                    : "rgba(37, 99, 235, 0.12)",
+                                color:
+                                  item.tierBadgeColor === "emerald"
+                                    ? "var(--accent-emerald, #059669)"
+                                    : item.tierBadgeColor === "purple"
+                                    ? "var(--accent-purple, #7c3aed)"
+                                    : item.tierBadgeColor === "rose"
+                                    ? "var(--accent-rose, #e11d48)"
+                                    : "var(--accent-blue, #2563eb)",
+                                border: "1px solid var(--border-subtle)",
+                              }}
+                            >
+                              ⭐ {item.companyTier}
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "5px", flexWrap: "wrap", fontSize: "12px", color: "var(--text-muted)" }}>
+                            <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{item.companyName}</span>
+                            {item.location && (
+                              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                <MapPin size={12} />
+                                {item.location.city ? `${item.location.city}, ` : ""}{item.location.country || (item.location.remote ? "Remote" : "Global")}
+                              </span>
+                            )}
+                            {item.reputationScore && (
+                              <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--accent-amber, #d97706)" }}>
+                                <Award size={12} /> Rep: {item.reputationScore}/100
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Match Score */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <ScoreRing score={item.agentScore || 85} size={44} strokeWidth={4} />
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-primary)" }}>Agent Fit</span>
+                            <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>Synthesized</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Middle: Expected Pay & Market Benchmark */}
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          backgroundColor: "rgba(16, 185, 129, 0.08)",
+                          border: "1px solid rgba(16, 185, 129, 0.22)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          flexWrap: "wrap",
+                          gap: "8px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <DollarSign size={15} color="var(--accent-emerald, #059669)" />
+                          <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--accent-emerald, #059669)" }}>
+                            Expected Pay: {item.expectedPay}
+                          </span>
+                        </div>
+                        {item.payBenchmarkSummary && (
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                            📊 {item.payBenchmarkSummary}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Why this fits bullets */}
+                      {item.whyThisFits && item.whyThisFits.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            Why this matches your query:
+                          </span>
+                          <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "12px", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "2px" }}>
+                            {item.whyThisFits.map((reason: string, rIdx: number) => (
+                              <li key={rIdx}>{reason}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Company Pros & Footprint */}
+                      {item.pros && item.pros.length > 0 && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Signals:</span>
+                          {item.pros.map((pro: string, pIdx: number) => (
+                            <span
+                              key={pIdx}
+                              style={{
+                                fontSize: "11px",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                backgroundColor: "var(--bg-secondary)",
+                                color: "var(--text-secondary)",
+                                border: "1px solid var(--border-subtle)",
+                              }}
+                            >
+                              ✓ {pro}
+                            </span>
+                          ))}
+                          {item.cons && item.cons.length > 0 && (
+                            <span
+                              key={item.cons[0]}
+                              style={{
+                                fontSize: "11px",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                backgroundColor: "rgba(217, 119, 6, 0.08)",
+                                color: "var(--accent-amber, #d97706)",
+                                border: "1px solid rgba(217, 119, 6, 0.2)",
+                              }}
+                            >
+                              ⚠ {item.cons[0]}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Card Actions */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px", paddingTop: "6px", borderTop: "1px solid var(--border-subtle)" }}>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => setSelectedJobId(item.id)}
+                          style={{ fontSize: "12px", padding: "5px 12px" }}
+                        >
+                          View Details & Tailor
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={(e) => handleSaveAgentJob(item.id, e)}
+                          style={{
+                            fontSize: "12px",
+                            padding: "5px 12px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            borderColor: savedAgentJobIds.has(item.id) ? "rgba(16, 185, 129, 0.5)" : undefined,
+                            color: savedAgentJobIds.has(item.id) ? "var(--accent-emerald, #059669)" : "var(--text-primary)",
+                            backgroundColor: savedAgentJobIds.has(item.id) ? "rgba(16, 185, 129, 0.1)" : undefined,
+                          }}
+                        >
+                          {savedAgentJobIds.has(item.id) ? (
+                            <>
+                              <BookmarkCheck size={13} color="var(--accent-emerald, #059669)" />
+                              <span>Added to Board</span>
+                            </>
+                          ) : (
+                            <>
+                              <Bookmark size={13} />
+                              <span>+ Add to Board</span>
+                            </>
+                          )}
+                        </button>
+                        {item.applyUrl && (
+                          <a
+                            href={item.applyUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-primary"
+                            style={{
+                              fontSize: "12px",
+                              padding: "5px 12px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              textDecoration: "none",
+                            }}
+                          >
+                            <span>Apply on Career Page</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Expandable AI Search Expansion & Combinations Panel */}
       {showAiCombinations && (
