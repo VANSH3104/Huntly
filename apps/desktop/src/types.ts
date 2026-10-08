@@ -36,6 +36,7 @@ export interface JobFilterState {
   status: "all" | "active" | "stale" | "closed";
   sortBy: "matchScore" | "postedAt" | "company" | "salary";
   sortOrder: "asc" | "desc";
+  postedWithin?: "all" | "4h" | "9h" | "24h" | "3d" | "7d" | "30d";
 }
 
 export interface DashboardStats {
