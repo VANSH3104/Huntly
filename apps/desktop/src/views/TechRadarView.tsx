@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../lib/api";
 import {
@@ -22,8 +22,10 @@ import {
   HiXMark,
   HiOutlineChatBubbleLeftRight,
   HiOutlineClock,
+  HiOutlineChevronLeft,
   HiOutlineChevronRight,
   HiOutlineQueueList,
+  HiOutlineRocketLaunch,
 } from "react-icons/hi2";
 
 interface IntelCard {
@@ -57,6 +59,9 @@ export const TechRadarView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>("");
+
+  // Horizontal Scroller Ref
+  const scrollerRef = useRef<HTMLDivElement>(null);
 
   // Deep dive modal state
   const [selectedForDeepDive, setSelectedForDeepDive] = useState<IntelCard | null>(null);
@@ -95,6 +100,18 @@ export const TechRadarView: React.FC = () => {
     loadFeed(true);
   };
 
+  const scrollLeft = () => {
+    if (scrollerRef.current) {
+      scrollerRef.current.scrollBy({ left: -380, behavior: "smooth" });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollerRef.current) {
+      scrollerRef.current.scrollBy({ left: 380, behavior: "smooth" });
+    }
+  };
+
   const handleOpenDeepDive = async (card: IntelCard) => {
     setSelectedForDeepDive(card);
     setIsLoadingDeepDive(true);
@@ -122,15 +139,15 @@ export const TechRadarView: React.FC = () => {
 
   const getSourceIcon = (source: string) => {
     if (source.includes("Hacker") || source.includes("HN")) {
-      return <SiYcombinator color="#ff6600" size={16} />;
+      return <SiYcombinator color="#ff6600" size={15} />;
     }
     if (source.includes("GitHub")) {
-      return <SiGithub size={16} />;
+      return <SiGithub size={15} />;
     }
     if (source.includes("arXiv")) {
-      return <SiArxiv color="#b31b1b" size={16} />;
+      return <SiArxiv color="#b31b1b" size={15} />;
     }
-    return <SiHuggingface color="#ffd21e" size={16} />;
+    return <SiHuggingface color="#ffd21e" size={15} />;
   };
 
   const categories = [
@@ -152,135 +169,47 @@ export const TechRadarView: React.FC = () => {
     );
   });
 
+  // Featured top 6 stories for horizontal scroller
+  const featuredStories = feed.slice(0, 6);
+
   return (
     <div style={{ padding: "28px 32px", maxWidth: "1400px", margin: "0 auto" }}>
-      {/* Live Breaking News Ticker Scroller */}
-      {feed.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          style={{
-            background: "linear-gradient(90deg, rgba(99, 102, 241, 0.08) 0%, rgba(236, 72, 153, 0.08) 100%)",
-            border: "1px solid rgba(99, 102, 241, 0.2)",
-            borderRadius: "12px",
-            padding: "10px 16px",
-            marginBottom: "24px",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            overflow: "hidden",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontWeight: 700,
-              fontSize: "12px",
-              color: "#e11d48",
-              background: "rgba(244, 63, 94, 0.12)",
-              padding: "4px 10px",
-              borderRadius: "8px",
-              flexShrink: 0,
-            }}
-          >
-            <HiFire size={14} /> LIVE TICKER
-          </div>
-
-          <div
-            style={{
-              overflow: "hidden",
-              position: "relative",
-              flex: 1,
-              maskImage: "linear-gradient(to right, transparent, black 3%, black 97%, transparent)",
-              WebkitMaskImage: "linear-gradient(to right, transparent, black 3%, black 97%, transparent)",
-            }}
-          >
-            <div className="animate-marquee-track" style={{ display: "flex", gap: "36px", alignItems: "center" }}>
-              {[...feed.slice(0, 10), ...feed.slice(0, 10)].map((item, idx) => (
-                <a
-                  key={idx}
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "13px",
-                    color: "var(--text-primary)",
-                    textDecoration: "none",
-                    fontWeight: 500,
-                    flexShrink: 0,
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                    transition: "background 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent-indigo)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-primary)";
-                  }}
-                >
-                  {getSourceIcon(item.source)}
-                  <span style={{ maxWidth: "340px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {item.title}
-                  </span>
-                  {item.score > 0 && (
-                    <span style={{ fontSize: "11px", color: "var(--accent-indigo)", fontWeight: 600, background: "rgba(99, 102, 241, 0.1)", padding: "1px 6px", borderRadius: "4px" }}>
-                      {item.score} ▲
-                    </span>
-                  )}
-                  <HiOutlineChevronRight size={12} style={{ opacity: 0.4 }} />
-                </a>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Main Header Banner */}
+      {/* Top Banner Header */}
       <div
         style={{
           background: "var(--bg-card)",
           border: "1px solid var(--border-subtle)",
-          borderRadius: "18px",
-          padding: "26px 30px",
+          borderRadius: "16px",
+          padding: "24px 28px",
           marginBottom: "28px",
-          boxShadow: "0 4px 24px rgba(0,0,0,0.02)",
-          position: "relative",
-          overflow: "hidden",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.02)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "18px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
               <div
                 style={{
-                  width: "38px",
-                  height: "38px",
+                  width: "36px",
+                  height: "36px",
                   borderRadius: "10px",
                   background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   color: "#fff",
-                  boxShadow: "0 4px 16px rgba(99, 102, 241, 0.35)",
+                  boxShadow: "0 4px 14px rgba(99, 102, 241, 0.3)",
                 }}
               >
                 <HiSparkles size={20} />
               </div>
-              <h1 style={{ fontSize: "24px", fontWeight: 700, margin: 0, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+              <h1 style={{ fontSize: "22px", fontWeight: 700, margin: 0, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                 Tech & AI Intelligence Radar
               </h1>
               <span
                 style={{
-                  background: "rgba(99, 102, 241, 0.12)",
-                  color: "#4f46e5",
+                  background: "rgba(99, 102, 241, 0.1)",
+                  color: "var(--accent-indigo)",
                   padding: "4px 10px",
                   borderRadius: "20px",
                   fontSize: "11px",
@@ -290,16 +219,16 @@ export const TechRadarView: React.FC = () => {
                   gap: "4px",
                 }}
               >
-                <HiBolt size={13} /> CURATED INTELLIGENCE
+                <HiBolt size={13} /> LIVE INTEL FEED
               </span>
             </div>
-            <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: 0, maxWidth: "740px", lineHeight: "1.5" }}>
-              Live web crawler monitoring Hacker News top stories, new AI models, open-source repositories, and engineering architecture breakdowns—distilled into actionable, readable material.
+            <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: 0, maxWidth: "700px", lineHeight: "1.5" }}>
+              Real-time web crawler scanning Hacker News frontpage, arXiv releases, and AI engineering breakdowns—synthesized into actionable material.
             </p>
           </div>
 
-          {/* Refresh Action */}
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          {/* Sync status & Refresh button */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             {lastUpdated && (
               <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "var(--text-secondary)", fontWeight: 500 }}>
                 <HiOutlineClock size={14} /> Synced at {lastUpdated}
@@ -311,7 +240,7 @@ export const TechRadarView: React.FC = () => {
               onClick={handleManualRefresh}
               disabled={isRefreshing || isLoading}
               style={{
-                padding: "10px 18px",
+                padding: "9px 16px",
                 borderRadius: "10px",
                 background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
                 color: "#fff",
@@ -322,15 +251,218 @@ export const TechRadarView: React.FC = () => {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                boxShadow: "0 2px 12px rgba(99, 102, 241, 0.3)",
+                boxShadow: "0 2px 10px rgba(99, 102, 241, 0.25)",
               }}
             >
-              <HiOutlineArrowPath size={16} className={isRefreshing ? "spin" : ""} />
-              {isRefreshing ? "Crawling & Synthesizing..." : "Scrape & Synthesize Live Intel"}
+              <HiOutlineArrowPath size={15} className={isRefreshing ? "spin" : ""} />
+              {isRefreshing ? "Scanning & Synthesizing..." : "Scrape & Synthesize Live"}
             </motion.button>
           </div>
         </div>
       </div>
+
+      {/* Featured Horizontal Card Scroller Section */}
+      {featuredStories.length > 0 && (
+        <div style={{ marginBottom: "32px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div
+                style={{
+                  background: "rgba(244, 63, 94, 0.12)",
+                  color: "#e11d48",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                }}
+              >
+                <HiFire size={15} /> BREAKING TECH STREAMS
+              </div>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 500 }}>
+                Top trending stories across HN & arXiv
+              </span>
+            </div>
+
+            {/* Scroller Control Arrows */}
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                onClick={scrollLeft}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-subtle)",
+                  background: "var(--bg-card)",
+                  color: "var(--text-primary)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                }}
+                title="Scroll Left"
+              >
+                <HiOutlineChevronLeft size={16} />
+              </button>
+              <button
+                onClick={scrollRight}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-subtle)",
+                  background: "var(--bg-card)",
+                  color: "var(--text-primary)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                }}
+                title="Scroll Right"
+              >
+                <HiOutlineChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Horizontal Scroller Container */}
+          <div
+            ref={scrollerRef}
+            style={{
+              display: "flex",
+              gap: "16px",
+              overflowX: "auto",
+              scrollSnapType: "x mandatory",
+              paddingBottom: "8px",
+              scrollbarWidth: "thin",
+            }}
+          >
+            {featuredStories.map((story) => (
+              <motion.div
+                key={story.id}
+                whileHover={{ y: -3, transition: { duration: 0.15 } }}
+                style={{
+                  flex: "0 0 360px",
+                  scrollSnapAlign: "start",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "14px",
+                  padding: "18px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "2px 7px",
+                          borderRadius: "6px",
+                          background: story.source.includes("Hacker") ? "rgba(255, 102, 0, 0.12)" : "rgba(99, 102, 241, 0.12)",
+                          color: story.source.includes("Hacker") ? "#ea580c" : "#4f46e5",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        {getSourceIcon(story.source)}
+                        {story.source}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--text-secondary)", fontWeight: 600 }}>
+                      {story.score > 0 && (
+                        <span style={{ color: "#e11d48" }}>{story.score} ▲</span>
+                      )}
+                      <span>⏱️ {story.readTime}</span>
+                    </div>
+                  </div>
+
+                  <a
+                    href={story.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      color: "var(--text-primary)",
+                      textDecoration: "none",
+                      lineHeight: "1.4",
+                      marginBottom: "8px",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {story.title}
+                  </a>
+
+                  <p
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--text-secondary)",
+                      lineHeight: "1.5",
+                      margin: "0 0 12px 0",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {story.executiveSummary}
+                  </p>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: "1px solid var(--border-subtle)" }}>
+                  <button
+                    onClick={() => handleOpenDeepDive(story)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--accent-indigo)",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: 0,
+                    }}
+                  >
+                    <HiOutlineBookOpen size={14} /> Deep Dive
+                  </button>
+
+                  <a
+                    href={story.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--text-secondary)",
+                      textDecoration: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "3px",
+                    }}
+                  >
+                    Source <HiOutlineArrowTopRightOnSquare size={12} />
+                  </a>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Control Bar: Categories & Search */}
       <div
@@ -340,10 +472,10 @@ export const TechRadarView: React.FC = () => {
           alignItems: "center",
           flexWrap: "wrap",
           gap: "14px",
-          marginBottom: "26px",
+          marginBottom: "24px",
         }}
       >
-        {/* Animated Category Pills */}
+        {/* Category Tabs */}
         <div
           style={{
             display: "flex",
@@ -363,7 +495,7 @@ export const TechRadarView: React.FC = () => {
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
                 style={{
-                  padding: "8px 14px",
+                  padding: "7px 14px",
                   borderRadius: "8px",
                   border: "none",
                   background: isSelected ? "var(--bg-card)" : "transparent",
@@ -393,28 +525,28 @@ export const TechRadarView: React.FC = () => {
           />
           <input
             type="text"
-            placeholder="Search keywords, models, tools..."
+            placeholder="Search topics, models, tools..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
-              padding: "9px 14px 9px 36px",
+              padding: "8px 14px 8px 36px",
               borderRadius: "10px",
               border: "1px solid var(--border-subtle)",
               background: "var(--bg-card)",
               color: "var(--text-primary)",
               fontSize: "13px",
-              width: "280px",
+              width: "260px",
               outline: "none",
             }}
           />
         </div>
       </div>
 
-      {/* Intelligence Feed Grid */}
+      {/* Main Intelligence Grid */}
       {isLoading && feed.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "100px 0", color: "var(--text-secondary)" }}>
-          <HiOutlineArrowPath size={36} className="spin" style={{ color: "var(--accent-indigo)", marginBottom: "14px" }} />
-          <p style={{ fontSize: "15px", fontWeight: 500 }}>Scanning Hacker News, arXiv, and web intelligence streams...</p>
+        <div style={{ textAlign: "center", padding: "80px 0", color: "var(--text-secondary)" }}>
+          <HiOutlineArrowPath size={32} className="spin" style={{ color: "var(--accent-indigo)", marginBottom: "12px" }} />
+          <p style={{ fontSize: "14px", fontWeight: 500 }}>Scanning Hacker News, arXiv, and web intelligence streams...</p>
         </div>
       ) : filteredFeed.length === 0 ? (
         <div
@@ -433,254 +565,246 @@ export const TechRadarView: React.FC = () => {
           </p>
         </div>
       ) : (
-        <motion.div
-          layout
+        <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(440px, 1fr))",
-            gap: "24px",
+            gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
+            gap: "20px",
           }}
         >
-          <AnimatePresence>
-            {filteredFeed.map((item, idx) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.3) }}
-                whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: "16px",
-                  padding: "24px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  boxShadow: "0 2px 12px rgba(0,0,0,0.02)",
-                  position: "relative",
-                }}
-              >
-                <div>
-                  {/* Top Meta Bar */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          background: item.source.includes("Hacker") ? "rgba(255, 102, 0, 0.12)" : "rgba(99, 102, 241, 0.12)",
-                          color: item.source.includes("Hacker") ? "#ea580c" : "#4f46e5",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "5px",
-                        }}
-                      >
-                        {getSourceIcon(item.source)}
-                        {item.source}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          background: "var(--bg-secondary)",
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        {item.category}
-                      </span>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "var(--text-secondary)", fontWeight: 500 }}>
-                      {item.score > 0 && (
-                        <span style={{ display: "flex", alignItems: "center", gap: "3px", color: "#e11d48", fontWeight: 700 }}>
-                          <HiFire size={14} /> {item.score}
-                        </span>
-                      )}
-                      {item.commentsCount > 0 && (
-                        <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                          <HiOutlineChatBubbleLeftRight size={13} /> {item.commentsCount}
-                        </span>
-                      )}
-                      <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                        <HiOutlineClock size={13} /> {item.readTime}
-                      </span>
-                    </div>
+          {filteredFeed.map((item, idx) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.25) }}
+              whileHover={{ y: -2, transition: { duration: 0.15 } }}
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "14px",
+                padding: "20px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+              }}
+            >
+              <div>
+                {/* Card Top Meta */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        background: item.source.includes("Hacker") ? "rgba(255, 102, 0, 0.12)" : "rgba(99, 102, 241, 0.12)",
+                        color: item.source.includes("Hacker") ? "#ea580c" : "#4f46e5",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      {getSourceIcon(item.source)}
+                      {item.source}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        background: "var(--bg-secondary)",
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      {item.category}
+                    </span>
                   </div>
 
-                  {/* Headline */}
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      fontSize: "17px",
-                      fontWeight: 700,
-                      color: "var(--text-primary)",
-                      textDecoration: "none",
-                      lineHeight: "1.4",
-                      marginBottom: "10px",
-                      display: "inline-flex",
-                      alignItems: "flex-start",
-                      gap: "6px",
-                    }}
-                  >
-                    <span>{item.title}</span>
-                    <HiOutlineArrowTopRightOnSquare size={14} style={{ flexShrink: 0, marginTop: "4px", opacity: 0.6 }} />
-                  </a>
-
-                  {/* Executive Summary */}
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "var(--text-secondary)",
-                      lineHeight: "1.6",
-                      margin: "0 0 14px 0",
-                    }}
-                  >
-                    {item.executiveSummary}
-                  </p>
-
-                  {/* Technical Highlights & Specs Glass Box */}
-                  {item.technicalHighlights && item.technicalHighlights.length > 0 && (
-                    <div
-                      style={{
-                        background: "var(--bg-secondary)",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        marginBottom: "14px",
-                        border: "1px solid var(--border-subtle)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          color: "var(--accent-indigo)",
-                          marginBottom: "8px",
-                          letterSpacing: "0.04em",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <HiBolt size={13} /> TECHNICAL HIGHLIGHTS & SPECS
-                      </div>
-                      <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.5" }}>
-                        {item.technicalHighlights.map((hl, i) => (
-                          <li key={i} style={{ marginBottom: i < item.technicalHighlights.length - 1 ? "4px" : "0" }}>
-                            {hl}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Practical Takeaway Callout */}
-                  {item.practicalImpact && (
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#16a34a",
-                        fontWeight: 500,
-                        marginBottom: "14px",
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "6px",
-                      }}
-                    >
-                      <HiOutlineLightBulb size={15} style={{ flexShrink: 0, marginTop: "2px" }} />
-                      <span>
-                        <strong>Takeaway:</strong> {item.practicalImpact}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "var(--text-secondary)", fontWeight: 500 }}>
+                    {item.score > 0 && (
+                      <span style={{ color: "#e11d48", fontWeight: 700 }}>{item.score} ▲</span>
+                    )}
+                    {item.commentsCount > 0 && (
+                      <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                        <HiOutlineChatBubbleLeftRight size={12} /> {item.commentsCount}
                       </span>
-                    </div>
-                  )}
-
-                  {/* Concept Tags */}
-                  {item.keyConcepts && (
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "16px" }}>
-                      {item.keyConcepts.map((tag, i) => (
-                        <span
-                          key={i}
-                          style={{
-                            fontSize: "11px",
-                            padding: "2px 8px",
-                            borderRadius: "6px",
-                            background: "var(--bg-secondary)",
-                            color: "var(--text-secondary)",
-                            fontWeight: 500,
-                          }}
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                    )}
+                    <span>⏱️ {item.readTime}</span>
+                  </div>
                 </div>
 
-                {/* Bottom Action Bar */}
-                <div
+                {/* Headline Link */}
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingTop: "14px",
-                    borderTop: "1px solid var(--border-subtle)",
-                    gap: "10px",
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    color: "var(--text-primary)",
+                    textDecoration: "none",
+                    lineHeight: "1.4",
+                    marginBottom: "10px",
+                    display: "inline-flex",
+                    alignItems: "flex-start",
+                    gap: "6px",
                   }}
                 >
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleOpenDeepDive(item)}
-                    style={{
-                      flex: 1,
-                      padding: "9px 14px",
-                      borderRadius: "8px",
-                      background: "var(--bg-secondary)",
-                      color: "var(--text-primary)",
-                      border: "1px solid var(--border-subtle)",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    <HiOutlineBookOpen size={15} color="var(--accent-indigo)" />
-                    Deep-Dive Architecture
-                  </motion.button>
+                  <span>{item.title}</span>
+                  <HiOutlineArrowTopRightOnSquare size={13} style={{ flexShrink: 0, marginTop: "4px", opacity: 0.5 }} />
+                </a>
 
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
+                {/* Executive Summary */}
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "var(--text-secondary)",
+                    lineHeight: "1.55",
+                    margin: "0 0 14px 0",
+                  }}
+                >
+                  {item.executiveSummary}
+                </p>
+
+                {/* Technical Highlights Box */}
+                {item.technicalHighlights && item.technicalHighlights.length > 0 && (
+                  <div
                     style={{
-                      padding: "9px 14px",
+                      background: "var(--bg-secondary)",
                       borderRadius: "8px",
-                      background: "rgba(99, 102, 241, 0.1)",
-                      color: "var(--accent-indigo)",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                      textDecoration: "none",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
+                      padding: "10px 12px",
+                      marginBottom: "12px",
+                      border: "1px solid var(--border-subtle)",
                     }}
                   >
-                    Source <HiOutlineArrowTopRightOnSquare size={13} />
-                  </a>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        color: "var(--accent-indigo)",
+                        marginBottom: "6px",
+                        letterSpacing: "0.04em",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <HiBolt size={12} /> TECHNICAL HIGHLIGHTS & SPECS
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: "14px", fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.45" }}>
+                      {item.technicalHighlights.map((hl, i) => (
+                        <li key={i} style={{ marginBottom: i < item.technicalHighlights.length - 1 ? "3px" : "0" }}>
+                          {hl}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Takeaway */}
+                {item.practicalImpact && (
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#16a34a",
+                      fontWeight: 500,
+                      marginBottom: "12px",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "5px",
+                    }}
+                  >
+                    <HiOutlineLightBulb size={14} style={{ flexShrink: 0, marginTop: "2px" }} />
+                    <span>
+                      <strong>Takeaway:</strong> {item.practicalImpact}
+                    </span>
+                  </div>
+                )}
+
+                {/* Concept Tags */}
+                {item.keyConcepts && (
+                  <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "14px" }}>
+                    {item.keyConcepts.map((tag, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontSize: "11px",
+                          padding: "2px 7px",
+                          borderRadius: "4px",
+                          background: "var(--bg-secondary)",
+                          color: "var(--text-secondary)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Action Bar */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingTop: "12px",
+                  borderTop: "1px solid var(--border-subtle)",
+                  gap: "8px",
+                }}
+              >
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleOpenDeepDive(item)}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    background: "var(--bg-secondary)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-subtle)",
+                    fontWeight: 600,
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <HiOutlineBookOpen size={14} color="var(--accent-indigo)" />
+                  Deep-Dive Architecture
+                </motion.button>
+
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    background: "rgba(99, 102, 241, 0.08)",
+                    color: "var(--accent-indigo)",
+                    fontWeight: 600,
+                    fontSize: "12px",
+                    textDecoration: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "3px",
+                  }}
+                >
+                  Source <HiOutlineArrowTopRightOnSquare size={12} />
+                </a>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       )}
 
       {/* Deep-Dive Architectural Breakdown Modal */}
@@ -708,19 +832,19 @@ export const TechRadarView: React.FC = () => {
             exit={{ scale: 0.95, opacity: 0 }}
             style={{
               background: "var(--bg-card)",
-              borderRadius: "18px",
+              borderRadius: "16px",
               width: "100%",
-              maxWidth: "780px",
+              maxWidth: "760px",
               maxHeight: "88vh",
               overflowY: "auto",
-              boxShadow: "0 24px 48px rgba(0,0,0,0.25)",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
               border: "1px solid var(--border-subtle)",
-              padding: "30px 34px",
+              padding: "28px 32px",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
                   <div style={{ background: "rgba(99, 102, 241, 0.12)", color: "#4f46e5", padding: "6px", borderRadius: "8px" }}>
@@ -730,7 +854,7 @@ export const TechRadarView: React.FC = () => {
                     Architectural Deep-Dive
                   </span>
                 </div>
-                <h2 style={{ fontSize: "20px", fontWeight: 700, margin: 0, color: "var(--text-primary)", lineHeight: "1.3" }}>
+                <h2 style={{ fontSize: "19px", fontWeight: 700, margin: 0, color: "var(--text-primary)", lineHeight: "1.3" }}>
                   {selectedForDeepDive.title}
                 </h2>
               </div>
@@ -745,7 +869,7 @@ export const TechRadarView: React.FC = () => {
 
             {isLoadingDeepDive ? (
               <div style={{ textAlign: "center", padding: "60px 0" }}>
-                <HiOutlineArrowPath size={30} className="spin" style={{ color: "var(--accent-indigo)", marginBottom: "12px" }} />
+                <HiOutlineArrowPath size={28} className="spin" style={{ color: "var(--accent-indigo)", marginBottom: "12px" }} />
                 <p style={{ fontSize: "14px", color: "var(--text-secondary)" }}>Synthesizing architectural specifications with Gemini...</p>
               </div>
             ) : deepDiveData ? (
@@ -756,12 +880,12 @@ export const TechRadarView: React.FC = () => {
                     style={{
                       background: "rgba(99, 102, 241, 0.08)",
                       border: "1px solid rgba(99, 102, 241, 0.2)",
-                      borderRadius: "12px",
-                      padding: "14px 18px",
+                      borderRadius: "10px",
+                      padding: "12px 16px",
                       fontSize: "13px",
                       color: "var(--text-primary)",
-                      marginBottom: "20px",
-                      lineHeight: "1.6",
+                      marginBottom: "18px",
+                      lineHeight: "1.55",
                     }}
                   >
                     <strong style={{ color: "var(--accent-indigo)", display: "block", marginBottom: "4px" }}>
@@ -775,9 +899,9 @@ export const TechRadarView: React.FC = () => {
                 <div
                   style={{
                     fontSize: "14px",
-                    lineHeight: "1.7",
+                    lineHeight: "1.65",
                     color: "var(--text-primary)",
-                    marginBottom: "24px",
+                    marginBottom: "20px",
                     whiteSpace: "pre-line",
                   }}
                 >
@@ -786,7 +910,7 @@ export const TechRadarView: React.FC = () => {
 
                 {/* Code Snippet Box */}
                 {deepDiveData.codeExample && (
-                  <div style={{ marginBottom: "20px" }}>
+                  <div style={{ marginBottom: "18px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                       <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
                         IMPLEMENTATION / SCHEMA SNIPPET
@@ -812,8 +936,8 @@ export const TechRadarView: React.FC = () => {
                     <pre
                       style={{
                         background: "var(--bg-secondary)",
-                        padding: "14px 16px",
-                        borderRadius: "10px",
+                        padding: "12px 14px",
+                        borderRadius: "8px",
                         border: "1px solid var(--border-subtle)",
                         fontSize: "12px",
                         fontFamily: "var(--font-mono)",
@@ -831,16 +955,16 @@ export const TechRadarView: React.FC = () => {
                   <div
                     style={{
                       background: "var(--bg-secondary)",
-                      borderRadius: "12px",
-                      padding: "16px",
+                      borderRadius: "10px",
+                      padding: "14px",
                       border: "1px solid var(--border-subtle)",
-                      marginBottom: "22px",
+                      marginBottom: "20px",
                     }}
                   >
-                    <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "6px" }}>
                       🎯 Key Engineering Lessons:
                     </div>
-                    <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "var(--text-secondary)", lineHeight: "1.6" }}>
+                    <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "13px", color: "var(--text-secondary)", lineHeight: "1.55" }}>
                       {deepDiveData.takeaways.map((t, i) => (
                         <li key={i}>{t}</li>
                       ))}
@@ -854,8 +978,8 @@ export const TechRadarView: React.FC = () => {
                     target="_blank"
                     rel="noreferrer"
                     style={{
-                      padding: "10px 20px",
-                      borderRadius: "10px",
+                      padding: "9px 18px",
+                      borderRadius: "8px",
                       background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
                       color: "#fff",
                       fontWeight: 600,
@@ -864,7 +988,7 @@ export const TechRadarView: React.FC = () => {
                       display: "flex",
                       alignItems: "center",
                       gap: "6px",
-                      boxShadow: "0 2px 10px rgba(99, 102, 241, 0.3)",
+                      boxShadow: "0 2px 10px rgba(99, 102, 241, 0.25)",
                     }}
                   >
                     Open Original Source <HiOutlineArrowTopRightOnSquare size={14} />
