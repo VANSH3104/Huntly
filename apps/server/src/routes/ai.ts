@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { GeminiClient } from "../services/gemini.js";
 import { latexCompiler } from "../services/latex-compiler.js";
+import { agentJobSearchService } from "../services/agent-job-search.js";
 
 export const aiRouter = Router();
 
@@ -323,6 +324,28 @@ aiRouter.post("/expand-filters", async (req, res, next) => {
     );
 
     res.json({ combinations });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/agent-search — deep agentic search with company reputation & market pay intelligence
+aiRouter.post("/agent-search", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      query: z.string().min(1),
+      resumeId: z.string().optional(),
+      limit: z.number().optional(),
+    });
+    const { query, resumeId, limit } = schema.parse(req.body);
+
+    const result = await agentJobSearchService.search({
+      query,
+      resumeId,
+      limit,
+    });
+
+    res.json(result);
   } catch (err) {
     next(err);
   }
