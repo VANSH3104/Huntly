@@ -91,6 +91,58 @@ export const api = {
         method: "POST",
         body: JSON.stringify(params),
       }),
+    agentSearch: (params: { query: string; resumeId?: string; limit?: number }) =>
+      request<{
+        query: string;
+        parsedIntent: {
+          targetRoles: string[];
+          targetSkills: string[];
+          location: string;
+          reputationTier: string;
+          compensationExpectation: string;
+          keyFocusAreas: string[];
+        };
+        executionSteps: Array<{
+          step: number;
+          title: string;
+          detail: string;
+          timestamp: string;
+        }>;
+        stats: {
+          totalEvaluatedInDb: number;
+          uniqueCompaniesResearched: number;
+          returnedMatches: number;
+        };
+        results: Array<{
+          id: string;
+          title: string;
+          normalizedTitle: string;
+          companyName: string;
+          companyId: string;
+          companyDomain?: string;
+          companyLogoUrl?: string;
+          location: any;
+          employmentType?: string;
+          sourceUrl?: string;
+          applyUrl?: string;
+          postedAt?: string;
+          descriptionSnippet: string;
+          skills: string[];
+          agentScore: number;
+          companyTier: string;
+          tierBadgeColor: "emerald" | "blue" | "purple" | "amber" | "rose";
+          reputationScore: number;
+          expectedPay: string;
+          payBenchmarkSummary: string;
+          whyThisFits: string[];
+          companyHighlights: string[];
+          pros: string[];
+          cons: string[];
+        }>;
+      }>("/ai/agent-search", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
   },
 
   // Companies
@@ -129,6 +181,16 @@ export const api = {
       request<any>("/crawl/discover", { method: "POST", body: JSON.stringify(params) }),
     scrapeLinkedIn: (params: { keywords: string; location?: string; remoteOnly?: boolean }) =>
       request<any>("/crawl/linkedin", { method: "POST", body: JSON.stringify(params) }),
+    scrapeTwitter: (params: { keywords: string; location?: string; limit?: number }) =>
+      request<{ success: boolean; found: number; added: number; jobs: any[] }>("/crawl/twitter", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+    scrapeYC: (params: { keywords?: string; role?: string; limit?: number }) =>
+      request<{ success: boolean; found: number; added: number; jobs: any[] }>("/crawl/yc", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
     crawlCareerPage: (params: { url: string; companyName?: string }) =>
       request<{ success: boolean; url: string; company: string; addedJobs: number }>("/crawl/career-page", {
         method: "POST",
