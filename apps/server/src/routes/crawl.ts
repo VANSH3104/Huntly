@@ -8,6 +8,7 @@ import { createSearchProvider } from "../crawler/search-provider.js";
 import { detectATS } from "../crawler/career-discovery.js";
 import { getATSAdapter, extractATSSlug } from "../crawler/ats-adapters.js";
 import { processExtractedJob } from "../crawler/job-processor.js";
+import { socialAndYCScraper } from "../crawler/social-yc-scraper.js";
 
 export const crawlRouter = Router();
 
@@ -198,7 +199,65 @@ crawlRouter.post("/linkedin", async (req, res, next) => {
   }
 });
 
-// POST /api/crawl/discover — discover live career pages via Google + LinkedIn for given keywords
+// POST /api/crawl/twitter — scrape live Twitter/X hiring tweets & posts
+crawlRouter.post("/twitter", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      keywords: z.string().optional(),
+      role: z.string().optional(),
+      location: z.string().optional(),
+      limit: z.coerce.number().optional().default(20),
+    });
+    const { keywords, role, location, limit } = schema.parse(req.body);
+
+    const items = await socialAndYCScraper.scrapeTwitterJobs({
+      keywords,
+      role,
+      location,
+      limit,
+    });
+    const result = await socialAndYCScraper.ingestJobs(items);
+
+    res.json({
+      success: true,
+      scraped: items.length,
+      ...result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/crawl/yc — scrape live Y Combinator startup job postings
+crawlRouter.post("/yc", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      keywords: z.string().optional(),
+      role: z.string().optional(),
+      location: z.string().optional(),
+      limit: z.coerce.number().optional().default(25),
+    });
+    const { keywords, role, location, limit } = schema.parse(req.body);
+
+    const items = await socialAndYCScraper.scrapeYCJobs({
+      keywords,
+      role,
+      location,
+      limit,
+    });
+    const result = await socialAndYCScraper.ingestJobs(items);
+
+    res.json({
+      success: true,
+      scraped: items.length,
+      ...result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/crawl/discover — discover live career pages via Google + LinkedIn + Twitter + YC for given keywords
 crawlRouter.post("/discover", async (req, res, next) => {
   try {
     const schema = z.object({
@@ -287,6 +346,36 @@ crawlRouter.post("/discover", async (req, res, next) => {
       console.error("[Crawl Route] ATS & YC career search error:", e);
     }
 
+    // 3. Scrape live Twitter/X hiring tweets
+    let twitterCount = 0;
+    try {
+      const twitterJobs = await socialAndYCScraper.scrapeTwitterJobs({
+        role: searchTerm,
+        location: loc,
+        limit: 15,
+      });
+      const twitterResult = await socialAndYCScraper.ingestJobs(twitterJobs);
+      twitterCount = twitterResult.added;
+    } catch (e) {
+      console.error("[Crawl Route] Twitter scrape error:", e);
+    }
+
+    // 4. Scrape live Y Combinator startup positions
+    let ycCount = 0;
+    try {
+      const ycJobs = await socialAndYCScraper.scrapeYCJobs({
+        role: searchTerm,
+        location: loc,
+        limit: 15,
+      });
+      const ycResult = await socialAndYCScraper.ingestJobs(ycJobs);
+      ycCount = ycResult.added;
+    } catch (e) {
+      console.error("[Crawl Route] YC scrape error:", e);
+    }
+
+    const totalAdded = linkedinCount + atsCount + twitterCount + ycCount;
+
     // Mark run completed
     await db.update(crawlRuns).set({
       status: "completed",
@@ -296,7 +385,9 @@ crawlRouter.post("/discover", async (req, res, next) => {
         location: loc,
         linkedin: linkedinCount,
         careerPages: atsCount,
-        total: linkedinCount + atsCount,
+        twitter: twitterCount,
+        yc: ycCount,
+        total: totalAdded,
       }),
     }).where(eq(crawlRuns.id, runId));
 
@@ -307,7 +398,9 @@ crawlRouter.post("/discover", async (req, res, next) => {
       discovered: {
         linkedin: linkedinCount,
         careerPages: atsCount,
-        total: linkedinCount + atsCount,
+        twitter: twitterCount,
+        yc: ycCount,
+        total: totalAdded,
       },
     });
   } catch (err) {
