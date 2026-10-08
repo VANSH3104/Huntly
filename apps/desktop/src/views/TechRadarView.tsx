@@ -192,45 +192,53 @@ export const TechRadarView: React.FC = () => {
 
           <div
             style={{
-              display: "flex",
-              gap: "28px",
-              overflowX: "auto",
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-              maskImage: "linear-gradient(to right, transparent, black 4%, black 96%, transparent)",
-              WebkitMaskImage: "linear-gradient(to right, transparent, black 4%, black 96%, transparent)",
+              overflow: "hidden",
+              position: "relative",
+              flex: 1,
+              maskImage: "linear-gradient(to right, transparent, black 3%, black 97%, transparent)",
+              WebkitMaskImage: "linear-gradient(to right, transparent, black 3%, black 97%, transparent)",
             }}
           >
-            {feed.slice(0, 8).map((item, idx) => (
-              <a
-                key={idx}
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "13px",
-                  color: "var(--text-primary)",
-                  textDecoration: "none",
-                  fontWeight: 500,
-                  flexShrink: 0,
-                  transition: "color 0.15s ease",
-                }}
-              >
-                {getSourceIcon(item.source)}
-                <span style={{ maxWidth: "380px", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {item.title}
-                </span>
-                {item.score > 0 && (
-                  <span style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: 600 }}>
-                    ({item.score} ▲)
+            <div className="animate-marquee-track" style={{ display: "flex", gap: "36px", alignItems: "center" }}>
+              {[...feed.slice(0, 10), ...feed.slice(0, 10)].map((item, idx) => (
+                <a
+                  key={idx}
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "13px",
+                    color: "var(--text-primary)",
+                    textDecoration: "none",
+                    fontWeight: 500,
+                    flexShrink: 0,
+                    padding: "4px 8px",
+                    borderRadius: "6px",
+                    transition: "background 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "var(--accent-indigo)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "var(--text-primary)";
+                  }}
+                >
+                  {getSourceIcon(item.source)}
+                  <span style={{ maxWidth: "340px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.title}
                   </span>
-                )}
-                <HiOutlineChevronRight size={12} style={{ opacity: 0.4 }} />
-              </a>
-            ))}
+                  {item.score > 0 && (
+                    <span style={{ fontSize: "11px", color: "var(--accent-indigo)", fontWeight: 600, background: "rgba(99, 102, 241, 0.1)", padding: "1px 6px", borderRadius: "4px" }}>
+                      {item.score} ▲
+                    </span>
+                  )}
+                  <HiOutlineChevronRight size={12} style={{ opacity: 0.4 }} />
+                </a>
+              ))}
+            </div>
           </div>
         </motion.div>
       )}
