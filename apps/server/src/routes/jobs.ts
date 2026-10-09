@@ -7,7 +7,7 @@ import { normalizeLocation } from "../utils/normalize.js";
 export const jobsRouter = Router();
 
 const JobFilterSchema = z.object({
-  status: z.enum(["active", "stale", "closed"]).optional(),
+  status: z.enum(["all", "active", "stale", "closed"]).optional(),
   minScore: z.coerce.number().min(0).max(100).optional(),
   resumeId: z.string().optional(),
   location: z.string().optional(),
@@ -26,6 +26,7 @@ const JobFilterSchema = z.object({
   sortOrder: z.string().optional(),
   postedWithin: z.enum(["4h", "9h", "24h", "3d", "7d", "30d"]).optional(),
   tab: z.enum(["recommended", "new", "all", "saved", "applied"]).optional(),
+  hideApplied: z.coerce.boolean().optional().default(true),
 });
 
 // GET /api/jobs
@@ -37,10 +38,21 @@ jobsRouter.get("/", async (req, res, next) => {
 
     // Filters
     const conditions = [];
-    if (filter.status) {
+
+    // Exclude closed jobs unless explicitly requested
+    if (filter.status === "closed") {
+      conditions.push(eq(jobs.status, "closed"));
+    } else if (filter.status === "active" || filter.status === "stale") {
       conditions.push(eq(jobs.status, filter.status));
-    } else {
+    } else if (filter.status !== "all") {
       conditions.push(ne(jobs.status, "closed"));
+    }
+
+    // Exclude already applied/tracked jobs from active discovery feeds
+    if (filter.tab === "applied") {
+      conditions.push(sql`${jobs.id} IN (SELECT job_id FROM applications)`);
+    } else if (filter.hideApplied) {
+      conditions.push(sql`${jobs.id} NOT IN (SELECT job_id FROM applications)`);
     }
 
     if (filter.companyId) {

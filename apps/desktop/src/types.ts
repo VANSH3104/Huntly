@@ -38,6 +38,7 @@ export interface JobFilterState {
   sortBy: "matchScore" | "postedAt" | "company" | "salary";
   sortOrder: "asc" | "desc";
   postedWithin?: "all" | "4h" | "9h" | "24h" | "3d" | "7d" | "30d";
+  hideApplied?: boolean;
 }
 
 export interface DashboardStats {

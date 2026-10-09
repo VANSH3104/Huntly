@@ -120,7 +120,7 @@ export const JobsView: React.FC = () => {
   // Reset page to 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [filters.search, filters.role, filters.location, filters.remoteOnly, filters.minScore, filters.ats, filters.status, filters.sortBy, filters.postedWithin]);
+  }, [filters.search, filters.role, filters.location, filters.remoteOnly, filters.minScore, filters.ats, filters.status, filters.sortBy, filters.postedWithin, filters.hideApplied]);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["jobs", filters, currentPage, pageSize],
@@ -136,6 +136,7 @@ export const JobsView: React.FC = () => {
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
         postedWithin: filters.postedWithin !== "all" ? filters.postedWithin : undefined,
+        hideApplied: filters.hideApplied,
         page: currentPage,
         limit: pageSize,
       }),
@@ -414,6 +415,29 @@ export const JobsView: React.FC = () => {
             onChange={(e) => setFilters({ remoteOnly: e.target.checked })}
           />
           <span>Remote only</span>
+        </label>
+
+        {/* Hide Applied / Tracked toggle */}
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "12px",
+            color: filters.hideApplied !== false ? "var(--text-primary)" : "var(--text-secondary)",
+            cursor: "pointer",
+            userSelect: "none",
+            whiteSpace: "nowrap",
+            fontWeight: 500,
+          }}
+          title="Exclude positions already tracked or applied on your Kanban board"
+        >
+          <input
+            type="checkbox"
+            checked={filters.hideApplied !== false}
+            onChange={(e) => setFilters({ hideApplied: e.target.checked })}
+          />
+          <span>Hide Applied</span>
         </label>
 
         {/* Match Score Slider */}

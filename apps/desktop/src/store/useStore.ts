@@ -48,6 +48,7 @@ const defaultFilters: JobFilterState = {
   sortBy: "matchScore",
   sortOrder: "desc",
   postedWithin: "all",
+  hideApplied: true,
 };
 
 const getInitialTheme = (): ThemeId => {

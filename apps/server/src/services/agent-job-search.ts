@@ -1,5 +1,5 @@
 import { getDatabase, jobs, companies, resumes } from "@agentforge/database";
-import { eq, ne, sql, desc } from "drizzle-orm";
+import { eq, ne, sql, desc, and } from "drizzle-orm";
 import { GeminiClient } from "./gemini.js";
 import { SerperSearchProvider, SearchResult } from "../crawler/search-provider.js";
 
@@ -166,7 +166,10 @@ Return ONLY a JSON object with this schema:
       `Querying active positions matching roles: ${parsedIntent.targetRoles.join(", ")} & keywords: ${parsedIntent.dbKeywords.join(", ")}`
     );
 
-    const conditions = [ne(jobs.status, "closed")];
+    const conditions = [
+      ne(jobs.status, "closed"),
+      sql`${jobs.id} NOT IN (SELECT job_id FROM applications)`,
+    ];
 
     // Build keyword filters across jobs and companies
     const searchTerms = [
@@ -203,7 +206,7 @@ Return ONLY a JSON object with this schema:
       .orderBy(desc(jobs.postedAt))
       .limit(60);
 
-    // If too few results, widen search to include recent active positions
+    // If too few results, widen search to include recent active positions (excluding closed & applied)
     if (candidateRows.length < 10) {
       const fallbackRows = await db
         .select({
@@ -212,7 +215,12 @@ Return ONLY a JSON object with this schema:
         })
         .from(jobs)
         .leftJoin(companies, eq(jobs.companyId, companies.id))
-        .where(ne(jobs.status, "closed"))
+        .where(
+          and(
+            ne(jobs.status, "closed"),
+            sql`${jobs.id} NOT IN (SELECT job_id FROM applications)`
+          )
+        )
         .orderBy(desc(jobs.postedAt))
         .limit(30);
 
