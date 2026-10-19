@@ -88,6 +88,15 @@ applicationsRouter.post("/", async (req, res, next) => {
     const data = schema.parse(req.body);
 
     const db = getDatabase();
+    const [existing] = await db
+      .select({ id: applications.id })
+      .from(applications)
+      .where(eq(applications.jobId, data.jobId))
+      .limit(1);
+    if (existing) {
+      res.json({ id: existing.id, existing: true });
+      return;
+    }
     const id = uuidv4();
 
     await db.insert(applications).values({

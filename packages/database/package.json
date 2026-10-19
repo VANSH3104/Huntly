@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@agentforge/shared": "workspace:*",
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^12.0.0",
     "drizzle-orm": "^0.33.0"
   },
   "devDependencies": {

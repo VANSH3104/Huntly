@@ -11,9 +11,21 @@ export interface LLMConfig {
 }
 
 export class GeminiClient {
-  private config: LLMConfig;
+  /** Models that returned a quota error recently, shared by every client instance. */
+  private static exhaustedUntil = new Map<string, number>();
+
+  private custom?: Partial<LLMConfig>;
 
   constructor(customConfig?: Partial<LLMConfig>) {
+    this.custom = customConfig;
+  }
+
+  /**
+   * Resolved on every call, not in the constructor: modules create clients at import time,
+   * which is before dotenv has loaded .env.
+   */
+  private get config(): LLMConfig {
+    const customConfig = this.custom;
     const provider = (customConfig?.provider ??
       process.env["LLM_PROVIDER"] ??
       (process.env["LLM_BASE_URL"] ? "freellm" : "gemini")) as LLMConfig["provider"];
@@ -27,7 +39,7 @@ export class GeminiClient {
       customConfig?.apiKey ??
       process.env["LLM_API_KEY"] ??
       process.env["GEMINI_API_KEY"] ??
-      "freellmapi-7d5b7932a1658638deebf67ab9ea1b699448421afa3587da";
+      "";
 
     const model =
       customConfig?.model ??
@@ -35,7 +47,7 @@ export class GeminiClient {
       process.env["GEMINI_MODEL"] ??
       "auto";
 
-    this.config = {
+    return {
       provider,
       baseUrl: baseUrl.replace(/\/+$/, ""),
       apiKey,
@@ -147,16 +159,37 @@ export class GeminiClient {
     throw lastError || new Error("Failed to generate response from LLM API");
   }
 
+
   private async callGeminiDirect(config: LLMConfig, prompt: string): Promise<string> {
     if (!config.apiKey) {
       throw new Error("GEMINI_API_KEY is not configured");
     }
     const genai = new GoogleGenerativeAI(config.apiKey);
-    const model = genai.getGenerativeModel({
-      model: config.model === "auto" ? "gemini-1.5-flash" : config.model,
-    });
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    const primary = config.model === "auto" ? "gemini-2.5-flash" : config.model;
+    const chain = [...new Set([primary, "gemini-3.8-flash", "gemini-2.5-flash"])];
+
+    let lastError: unknown;
+    for (const name of chain) {
+      if ((GeminiClient.exhaustedUntil.get(name) ?? 0) > Date.now()) continue;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const result = await genai.getGenerativeModel({ model: name }).generateContent(prompt);
+          return result.response.text().trim();
+        } catch (err) {
+          lastError = err;
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/429/.test(msg)) {
+            // Quota is per model. Skip to the next one and do not try this one again for a few minutes.
+            GeminiClient.exhaustedUntil.set(name, Date.now() + 5 * 60 * 1000);
+            break;
+          }
+          // Overload is worth retrying; bad keys, 404s and bad requests are not.
+          if (!/(500|502|503|504)/.test(msg)) break;
+          await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+        }
+      }
+    }
+    throw lastError ?? new Error("All Gemini models are unavailable right now");
   }
 
   public parseJsonFromText<T = unknown>(text: string): T {

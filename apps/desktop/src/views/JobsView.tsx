@@ -5,6 +5,7 @@ import { useStore } from "../store/useStore";
 import { ScoreRing } from "../components/common/ScoreRing";
 import { Badge } from "../components/common/Badge";
 import { AutoApplyModal } from "../components/AutoApplyModal";
+import { AutoApplyLauncher } from "../components/autoapply/AutoApplyLauncher";
 import {
   Search,
   SlidersHorizontal,
@@ -39,17 +40,145 @@ import {
   BookmarkCheck,
   Filter,
 } from "lucide-react";
+import {
+  AdvancedFiltersPanel,
+  AdvancedFiltersToggle,
+  ActiveFilterChips,
+  advancedToParams,
+  describeAdvancedChips,
+  type FilterChip,
+} from "../components/jobs/AdvancedFilters";
+import { LiveFeed } from "../components/jobs/LiveFeed";
+import type { JobFilterState } from "../types";
+
+const ATS_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: "yc", label: "YC Startups" },
+  { id: "greenhouse", label: "Greenhouse" },
+  { id: "lever", label: "Lever" },
+  { id: "ashby", label: "Ashby" },
+  { id: "workday", label: "Workday" },
+  { id: "workable", label: "Workable" },
+  { id: "smartrecruiters", label: "SmartRecruiters" },
+  { id: "recruitee", label: "Recruitee" },
+  { id: "remotive", label: "Remotive" },
+  { id: "remoteok", label: "RemoteOK" },
+  { id: "arbeitnow", label: "Arbeitnow" },
+  { id: "jobicy", label: "Jobicy" },
+  { id: "himalayas", label: "Himalayas" },
+  { id: "themuse", label: "The Muse" },
+  { id: "weworkremotely", label: "We Work Remotely" },
+  { id: "workingnomads", label: "Working Nomads" },
+  { id: "jobspresso", label: "Jobspresso" },
+  { id: "authenticjobs", label: "Authentic Jobs" },
+  { id: "nodesk", label: "NoDesk" },
+  { id: "justremote", label: "JustRemote" },
+  { id: "remote100k", label: "Remote100K" },
+  { id: "remoteleaf", label: "RemoteLeaf" },
+  { id: "landingjobs", label: "Landing.jobs" },
+  { id: "hackernews", label: "Hacker News" },
+  { id: "ycombinator", label: "Y Combinator jobs" },
+  { id: "simplifyinternships", label: "Simplify internships" },
+  { id: "simplifynewgrad", label: "Simplify new grad" },
+  { id: "internshala", label: "Internshala" },
+  { id: "cutshort", label: "Cutshort" },
+  { id: "teamtailor", label: "Teamtailor" },
+  { id: "bamboohr", label: "BambooHR" },
+  { id: "personio", label: "Personio" },
+  { id: "breezy", label: "Breezy HR" },
+  { id: "rippling", label: "Rippling" },
+  { id: "gemjobs", label: "Gem" },
+  { id: "adzuna", label: "Adzuna" },
+  { id: "jooble", label: "Jooble" },
+  { id: "reed", label: "Reed" },
+  { id: "usajobs", label: "USAJOBS" },
+  { id: "careerjet", label: "Careerjet" },
+  { id: "findwork", label: "Findwork" },
+];
+
+const POSTED_LABELS: Record<string, string> = {
+  "4h": "Past 4h",
+  "9h": "Past 9h",
+  "24h": "Past 24h",
+  "3d": "Past 3 days",
+  "7d": "Past week",
+  "30d": "Past month",
+};
+
+const toolbarGroupStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+  padding: "3px",
+  borderRadius: "var(--radius-md)",
+  border: "1px solid var(--border-subtle)",
+  background: "var(--bg-secondary)",
+  flexWrap: "wrap",
+};
+
+const toolbarButtonStyle: React.CSSProperties = {
+  fontSize: "12px",
+  padding: "6px 12px",
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  whiteSpace: "nowrap",
+};
+
+const quickToggleStyle = (on: boolean): React.CSSProperties => ({
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  fontSize: "12px",
+  color: on ? "var(--text-primary)" : "var(--text-secondary)",
+  cursor: "pointer",
+  userSelect: "none",
+  whiteSpace: "nowrap",
+});
+
+function describeBasicChips(f: JobFilterState): FilterChip[] {
+  const chips: FilterChip[] = [];
+  if (f.search) chips.push({ key: "search", label: `Search: ${f.search}`, clear: { search: "" } });
+  if (f.role) chips.push({ key: "role", label: `Role: ${f.role}`, clear: { role: "" } });
+  if (f.location) chips.push({ key: "location", label: `Location: ${f.location}`, clear: { location: "" } });
+  if (f.ats) {
+    const label = ATS_OPTIONS.find((o) => o.id === f.ats)?.label ?? f.ats;
+    chips.push({ key: "ats", label: `Source: ${label}`, clear: { ats: "" } });
+  }
+  if (f.postedWithin && f.postedWithin !== "all") {
+    chips.push({ key: "postedWithin", label: POSTED_LABELS[f.postedWithin] ?? f.postedWithin, clear: { postedWithin: "all" } });
+  }
+  if (f.remoteOnly) chips.push({ key: "remoteOnly", label: "Remote only", clear: { remoteOnly: false } });
+  if (f.minScore > 0) chips.push({ key: "minScore", label: `Match ≥ ${f.minScore}%`, clear: { minScore: 0 } });
+  return chips;
+}
 
 export const JobsView: React.FC = () => {
   const { filters, setFilters, resetFilters, setSelectedJobId } = useStore();
   const [autoApplyJob, setAutoApplyJob] = React.useState<any | null>(null);
   const [isBatchAutoApplying, setIsBatchAutoApplying] = React.useState(false);
+  const [showLauncher, setShowLauncher] = React.useState(false);
+  const [launcherIds, setLauncherIds] = React.useState<string[]>([]);
+  const [launcherTotal, setLauncherTotal] = React.useState(0);
   const [batchApplyStatus, setBatchApplyStatus] = React.useState<string | null>(null);
   const [batchApplyProgress, setBatchApplyProgress] = React.useState<{ current: number; total: number; currentJob?: string } | null>(null);
   const [isDiscovering, setIsDiscovering] = React.useState(false);
   const [discoverStatus, setDiscoverStatus] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(20);
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const [isScrapingBoards, setIsScrapingBoards] = React.useState(false);
+  const [showLiveFeed, setShowLiveFeed] = React.useState(false);
+
+  const { data: boardsData } = useQuery({
+    queryKey: ["crawl-boards"],
+    queryFn: () => api.crawl.listBoards(),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const boardList = boardsData?.boards ?? [];
+
+  const advancedChips = describeAdvancedChips(filters.advanced);
+  const activeChips = [...describeBasicChips(filters), ...advancedChips];
 
   // Continuous auto-discovery state
   const [isAutoHunting, setIsAutoHunting] = React.useState(false);
@@ -144,19 +273,19 @@ export const JobsView: React.FC = () => {
     filters.skills,
     filters.skillList,
     filters.industry,
+    filters.industries,
     filters.collection,
+    filters.collections,
     filters.minScore,
     filters.ats,
     filters.status,
     filters.sortBy,
     filters.postedWithin,
     filters.hideApplied,
+    filters.advanced,
   ]);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ["jobs", filters, currentPage, pageSize],
-    queryFn: () =>
-      api.jobs.list({
+  const buildJobParams = (page: number, limit: number) => ({
         search: filters.search,
         role: filters.role,
         specialization: filters.specialization || (filters.specializations || []).join(", "),
@@ -176,9 +305,15 @@ export const JobsView: React.FC = () => {
         sortOrder: filters.sortOrder,
         postedWithin: filters.postedWithin !== "all" ? filters.postedWithin : undefined,
         hideApplied: filters.hideApplied,
-        page: currentPage,
-        limit: pageSize,
-      }),
+        ...advancedToParams(filters.advanced),
+        page,
+        limit,
+  });
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["jobs", filters, currentPage, pageSize],
+    queryFn: () => api.jobs.list({ ...buildJobParams(currentPage, pageSize), facets: 1 }),
+    placeholderData: (prev) => prev,
   });
 
   const jobsList: any[] = data?.jobs || [];
@@ -187,7 +322,10 @@ export const JobsView: React.FC = () => {
 
   const handleDiscoverLive = async (silent = false) => {
     try {
-      if (!silent) setIsDiscovering(true);
+      if (!silent) {
+        setIsDiscovering(true);
+        setShowLiveFeed(true);
+      }
       setDiscoverStatus("Searching live public postings from LinkedIn, YC Startups & Career Pages...");
       const res = await api.crawl.discover({
         keywords: filters.search || filters.role || "Software Engineer",
@@ -207,6 +345,28 @@ export const JobsView: React.FC = () => {
       setTimeout(() => setDiscoverStatus(null), 4000);
     } finally {
       setIsDiscovering(false);
+    }
+  };
+
+  const handleScrapeBoards = async () => {
+    const keywords = (filters.search || filters.role).trim() || undefined;
+    try {
+      setIsScrapingBoards(true);
+      setShowLiveFeed(true);
+      setDiscoverStatus(`Scraping all job boards${keywords ? ` for "${keywords}"` : ""}...`);
+      const res = await api.crawl.boards({ keywords });
+      const failed = res.perBoard.filter((b) => b.error).map((b) => b.board);
+      setDiscoverStatus(
+        `Scraped ${res.scraped} postings from ${res.perBoard.length} boards: ${res.added} added, ${res.updated} updated` +
+          (failed.length ? ` (failed: ${failed.join(", ")})` : "")
+      );
+      await refetch();
+      setTimeout(() => setDiscoverStatus(null), 8000);
+    } catch (err: any) {
+      setDiscoverStatus(`Board scrape error: ${err.message || "Failed to scrape boards"}`);
+      setTimeout(() => setDiscoverStatus(null), 5000);
+    } finally {
+      setIsScrapingBoards(false);
     }
   };
 
@@ -346,385 +506,303 @@ export const JobsView: React.FC = () => {
   };
 
   const handleBatchAutoApply = async () => {
-    const eligibleJobs = jobsList.filter((j: any) => {
-      const rawScore = j.match?.overall ?? j.matchScore ?? 80;
-      const score = rawScore > 1 ? rawScore : rawScore * 100;
-      return score >= 65;
-    }).slice(0, 5);
-
-    if (eligibleJobs.length === 0) {
-      alert("No matching jobs found with score ≥ 65%. Try running Live Discover or adjusting filters.");
-      return;
+    try {
+      setIsBatchAutoApplying(true);
+      const MAX_IDS = 500;
+      const ids: string[] = [];
+      let page = 1;
+      let pages = 1;
+      do {
+        const res = await api.jobs.list(buildJobParams(page, 100));
+        ids.push(...(res.jobs || []).map((j: any) => j.id));
+        pages = res.pagination?.pages ?? 1;
+        page++;
+      } while (page <= pages && ids.length < MAX_IDS);
+      setLauncherIds(ids);
+      setLauncherTotal(totalPositions);
+      setShowLauncher(true);
+    } catch (err: any) {
+      alert(err.message || "Could not load the filtered jobs");
+    } finally {
+      setIsBatchAutoApplying(false);
     }
-
-    if (!confirm(`Launch Autonomous Job Agent for ${eligibleJobs.length} top-matched positions? The Playwright browser sandbox will navigate to each job page, fill your details from your active resume, upload your compiled LaTeX PDF, and submit.`)) {
-      return;
-    }
-
-    setIsBatchAutoApplying(true);
-    setBatchApplyStatus(`Starting Autonomous Agent session for ${eligibleJobs.length} jobs...`);
-
-    let appliedCount = 0;
-    for (let i = 0; i < eligibleJobs.length; i++) {
-      const job = eligibleJobs[i];
-      setBatchApplyProgress({ current: i + 1, total: eligibleJobs.length, currentJob: `${job.title} at ${job.company?.name || job.companyName || "Company"}` });
-      setBatchApplyStatus(`[${i + 1}/${eligibleJobs.length}] Auto-filling & submitting for ${job.title}...`);
-
-      try {
-        await api.autoApply.apply({
-          jobId: job.id,
-          mode: "auto_submit",
-        });
-        appliedCount++;
-      } catch (err: any) {
-        console.warn(`Auto-apply failed for ${job.title}:`, err);
-      }
-    }
-
-    setIsBatchAutoApplying(false);
-    setBatchApplyProgress(null);
-    setBatchApplyStatus(`Autonomous Agent finished! Successfully applied to ${appliedCount} positions. Check Applications Kanban.`);
-    await refetch();
-    setTimeout(() => setBatchApplyStatus(null), 10000);
   };
 
   return (
     <div className="page-container" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* Prominent Search & Filter Bar */}
+      {/* Search & filter toolbar: row one search + actions, row two quick filters */}
       <div
         className="glass-panel"
         style={{
-          padding: "16px 20px",
+          position: "sticky",
+          // .page-container is the scroller and has 24px top padding; pin flush to its edge.
+          top: "-24px",
+          zIndex: 20,
+          padding: "14px 18px",
           display: "flex",
-          flexWrap: "wrap",
+          flexDirection: "column",
           gap: "12px",
-          alignItems: "center",
         }}
       >
-        {/* Main Search Input */}
-        <div style={{ position: "relative", flex: 1, minWidth: "220px" }}>
-          <Search
-            size={16}
-            color="var(--text-muted)"
-            style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }}
-          />
-          <input
-            type="text"
-            placeholder="Search keywords, tech stack, titles..."
-            value={filters.search}
-            onChange={(e) => setFilters({ search: e.target.value })}
-            style={{ width: "100%", paddingLeft: "36px", paddingRight: filters.search ? "32px" : "12px" }}
-          />
-          {filters.search && (
-            <button
-              onClick={() => setFilters({ search: "" })}
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "var(--text-muted)",
-                padding: "2px",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
-
-        {/* Role input */}
-        <input
-          type="text"
-          placeholder="Role (e.g. Backend, Frontend, ML)"
-          value={filters.role}
-          onChange={(e) => setFilters({ role: e.target.value })}
-          style={{ width: "180px" }}
-        />
-
-        {/* Location input */}
-        <input
-          type="text"
-          placeholder="Location (e.g. Bengaluru, Remote)"
-          value={filters.location}
-          onChange={(e) => setFilters({ location: e.target.value })}
-          style={{ width: "160px" }}
-        />
-
-        {/* ATS Filter */}
-        <select
-          value={filters.ats}
-          onChange={(e) => setFilters({ ats: e.target.value })}
-          style={{ width: "140px" }}
-        >
-          <option value="">All ATS Platforms</option>
-          <option value="yc">YC Startups</option>
-          <option value="greenhouse">Greenhouse</option>
-          <option value="lever">Lever</option>
-          <option value="ashby">Ashby</option>
-          <option value="workday">Workday</option>
-        </select>
-
-        {/* Time Posted Freshness Filter */}
-        <select
-          value={filters.postedWithin || "all"}
-          onChange={(e) => setFilters({ postedWithin: e.target.value as any })}
-          style={{ width: "140px" }}
-          title="Filter by when the position was posted"
-        >
-          <option value="all">🕒 Any Time</option>
-          <option value="4h">⚡ Past 4 Hours</option>
-          <option value="9h">⏱️ Past 9 Hours</option>
-          <option value="24h">📅 Past 24 Hours</option>
-          <option value="3d">🗓️ Past 3 Days</option>
-          <option value="7d">📆 Past Week</option>
-          <option value="30d">🗓️ Past Month</option>
-        </select>
-
-        {/* Remote toggle */}
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            fontSize: "12px",
-            color: filters.remoteOnly ? "var(--text-primary)" : "var(--text-secondary)",
-            cursor: "pointer",
-            userSelect: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={filters.remoteOnly}
-            onChange={(e) => setFilters({ remoteOnly: e.target.checked })}
-          />
-          <span>Remote only</span>
-        </label>
-
-        {/* Hide Applied / Tracked toggle */}
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            fontSize: "12px",
-            color: filters.hideApplied !== false ? "var(--text-primary)" : "var(--text-secondary)",
-            cursor: "pointer",
-            userSelect: "none",
-            whiteSpace: "nowrap",
-            fontWeight: 500,
-          }}
-          title="Exclude positions already tracked or applied on your Kanban board"
-        >
-          <input
-            type="checkbox"
-            checked={filters.hideApplied !== false}
-            onChange={(e) => setFilters({ hideApplied: e.target.checked })}
-          />
-          <span>Hide Applied</span>
-        </label>
-
-        {/* Match Score Slider */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap" }}>
-          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-            Min Match: {filters.minScore}%
-          </span>
-          <input
-            type="range"
-            min="0"
-            max="95"
-            step="5"
-            value={filters.minScore}
-            onChange={(e) => setFilters({ minScore: parseInt(e.target.value, 10) })}
-            style={{ width: "85px", cursor: "pointer" }}
-          />
-        </div>
-
-        {/* Actions Cluster */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginLeft: "auto" }}>
-          {/* Agent Deep Search & Intelligence Toggle */}
-          <button
-            className={showAgentSearch ? "btn btn-primary" : "btn btn-secondary"}
-            onClick={() => setShowAgentSearch(!showAgentSearch)}
-            style={{
-              fontSize: "12px",
-              padding: "7px 13px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              borderColor: showAgentSearch ? "rgba(168, 85, 247, 0.7)" : "rgba(168, 85, 247, 0.35)",
-              backgroundColor: showAgentSearch ? "rgba(168, 85, 247, 0.22)" : "rgba(168, 85, 247, 0.08)",
-              color: "#c084fc",
-              fontWeight: 600,
-            }}
-            title="Agentic Search: Live web research on company reputation, Glassdoor & salary benchmarks"
-          >
-            <Bot size={15} color="#c084fc" />
-            <span>Agent Search</span>
-            <span
-              style={{
-                fontSize: "9px",
-                textTransform: "uppercase",
-                padding: "1px 5px",
-                borderRadius: "8px",
-                backgroundColor: "rgba(168, 85, 247, 0.35)",
-                color: "#e9d5ff",
-                letterSpacing: "0.5px",
-              }}
-            >
-              Web+AI
-            </span>
-          </button>
-
-          {/* AI Combinations Toggle */}
-          <button
-            className="btn btn-secondary"
-            onClick={() => {
-              if (!showAiCombinations && combinations.length === 0) {
-                handleGenerateCombinations();
-              } else {
-                setShowAiCombinations(!showAiCombinations);
-              }
-            }}
-            style={{
-              fontSize: "12px",
-              padding: "7px 12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              borderColor: showAiCombinations ? "rgba(168, 85, 247, 0.5)" : undefined,
-              color: showAiCombinations ? "#c084fc" : "var(--text-secondary)",
-            }}
-            title="AI generates all permutations and combinations of your filters"
-          >
-            <Sparkles size={14} color="#a855f7" />
-            <span>AI Combinations</span>
-            {combinations.length > 0 && (
-              <span
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+          <div style={{ position: "relative", flex: "1 1 260px", minWidth: "200px" }}>
+            <Search
+              size={16}
+              color="var(--text-muted)"
+              style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }}
+            />
+            <input
+              type="text"
+              aria-label="Search jobs"
+              placeholder="Search keywords, tech stack, titles (comma-separate terms)..."
+              value={filters.search}
+              onChange={(e) => setFilters({ search: e.target.value })}
+              style={{ width: "100%", paddingLeft: "36px", paddingRight: filters.search ? "32px" : "12px" }}
+            />
+            {filters.search && (
+              <button
+                aria-label="Clear search"
+                onClick={() => setFilters({ search: "" })}
                 style={{
-                  fontSize: "10px",
-                  padding: "1px 6px",
-                  borderRadius: "10px",
-                  backgroundColor: "rgba(168, 85, 247, 0.3)",
-                  color: "#d8b4fe",
+                  position: "absolute",
+                  right: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--text-muted)",
+                  padding: "2px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
                 }}
               >
-                {combinations.filter((c) => c.selected).length}/{combinations.length}
-              </span>
+                <X size={13} />
+              </button>
             )}
-          </button>
+          </div>
 
-          {/* Add Career URL Toggle */}
-          <button
-            className="btn btn-secondary"
-            onClick={() => setShowCustomBar(!showCustomBar)}
-            style={{
-              fontSize: "12px",
-              padding: "7px 12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
-            title="Crawl any specific company career page or YC link"
-          >
-            <Globe size={14} />
-            <span>+ Career URL</span>
-          </button>
+          {/* Find jobs group */}
+          <div role="group" aria-label="Find jobs" style={toolbarGroupStyle}>
+            <button
+              className="btn btn-primary"
+              onClick={() => handleDiscoverLive(false)}
+              disabled={isDiscovering}
+              style={toolbarButtonStyle}
+            >
+              <RefreshCw size={13} className={isDiscovering ? "animate-spin" : ""} />
+              <span>{isDiscovering ? "Searching..." : "Find & Add Jobs"}</span>
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={handleScrapeBoards}
+              disabled={isScrapingBoards}
+              style={toolbarButtonStyle}
+              title={
+                boardList.length
+                  ? `Scrape ${boardList.length} public job boards: ${boardList.map((b) => b.label).join(", ")}`
+                  : "Scrape every supported public job board for your search or role"
+              }
+            >
+              <Layers size={13} className={isScrapingBoards ? "animate-spin" : ""} />
+              <span>{isScrapingBoards ? "Scraping boards..." : "Scrape all boards"}</span>
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setIsAutoHunting(!isAutoHunting)}
+              aria-pressed={isAutoHunting}
+              style={{
+                ...toolbarButtonStyle,
+                color: isAutoHunting ? "var(--accent-emerald)" : "var(--text-secondary)",
+                borderColor: isAutoHunting ? "var(--accent-emerald)" : undefined,
+              }}
+              title="Automatically keeps finding real jobs matching your filters and adds them live to the board"
+            >
+              <Radio size={13} />
+              <span>{isAutoHunting ? "Auto-Hunt: ON" : "Auto-Hunt"}</span>
+            </button>
+          </div>
 
-          {/* Continuous Auto-Hunt Toggle */}
-          <button
-            className={isAutoHunting ? "btn btn-primary" : "btn btn-secondary"}
-            onClick={() => setIsAutoHunting(!isAutoHunting)}
-            style={{
-              fontSize: "12px",
-              padding: "7px 12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              border: isAutoHunting ? "1px solid rgba(34, 197, 94, 0.5)" : undefined,
-              backgroundColor: isAutoHunting ? "rgba(34, 197, 94, 0.15)" : undefined,
-              color: isAutoHunting ? "#4ade80" : "var(--text-secondary)",
-            }}
-            title="Automatically keeps finding real jobs matching your filters and adds them live to the board"
-          >
-            <Radio size={14} style={{ color: isAutoHunting ? "#22c55e" : "currentColor" }} />
-            <span>{isAutoHunting ? "Auto-Hunt: ON" : "Auto-Hunt"}</span>
-          </button>
+          {/* AI tools group */}
+          <div role="group" aria-label="AI tools" style={toolbarGroupStyle}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowAgentSearch(!showAgentSearch)}
+              aria-pressed={showAgentSearch}
+              style={{
+                ...toolbarButtonStyle,
+                color: "var(--accent-purple)",
+                borderColor: showAgentSearch ? "var(--accent-purple)" : undefined,
+                fontWeight: 600,
+              }}
+              title="Agentic Search: Live web research on company reputation, Glassdoor & salary benchmarks"
+            >
+              <Bot size={14} />
+              <span>Agent Search</span>
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (!showAiCombinations && combinations.length === 0) {
+                  handleGenerateCombinations();
+                } else {
+                  setShowAiCombinations(!showAiCombinations);
+                }
+              }}
+              aria-pressed={showAiCombinations}
+              style={{
+                ...toolbarButtonStyle,
+                color: showAiCombinations ? "var(--accent-purple)" : "var(--text-secondary)",
+                borderColor: showAiCombinations ? "var(--accent-purple)" : undefined,
+              }}
+              title="AI generates all permutations and combinations of your filters"
+            >
+              <Sparkles size={13} color="var(--accent-purple)" />
+              <span>AI Combinations</span>
+              {combinations.length > 0 && (
+                <span style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--accent-purple)" }}>
+                  {combinations.filter((c) => c.selected).length}/{combinations.length}
+                </span>
+              )}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowCustomBar(!showCustomBar)}
+              aria-pressed={showCustomBar}
+              style={toolbarButtonStyle}
+              title="Crawl any specific company career page or YC link"
+            >
+              <Globe size={13} />
+              <span>+ Career URL</span>
+            </button>
+          </div>
 
-          {/* Live Scrape Now Button */}
-          <button
-            className="btn btn-primary"
-            onClick={() => handleDiscoverLive(false)}
-            disabled={isDiscovering}
-            style={{
-              fontSize: "12px",
-              padding: "7px 16px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <RefreshCw size={13} className={isDiscovering ? "animate-spin" : ""} />
-            <span>{isDiscovering ? "Searching..." : "Find & Add Jobs"}</span>
-          </button>
-
-          {/* Autonomous Batch Auto-Apply Mode */}
           <button
             className="btn"
             onClick={handleBatchAutoApply}
             disabled={isBatchAutoApplying}
             style={{
-              fontSize: "12px",
-              padding: "7px 16px",
-              whiteSpace: "nowrap",
+              ...toolbarButtonStyle,
+              padding: "7px 14px",
               background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
               color: "#ffffff",
               border: "none",
-              borderRadius: "6px",
               fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              boxShadow: "0 2px 10px rgba(16, 185, 129, 0.35)",
+              boxShadow: "var(--shadow-sm)",
               cursor: isBatchAutoApplying ? "not-allowed" : "pointer",
             }}
-            title="Autonomous Job Agent: navigates to ATS portals, fills your details from resume, and submits applications"
+            title="Applies to every job matching your current filters in the background. Jobs you already applied to are skipped."
           >
             <Zap size={14} className={isBatchAutoApplying ? "animate-spin" : ""} />
-            <span>{isBatchAutoApplying ? "Auto-Applying..." : "⚡ Auto-Mode Apply"}</span>
+            <span>{isBatchAutoApplying ? "Collecting jobs..." : `Auto-Apply all${totalPositions ? ` (${totalPositions})` : ""}`}</span>
           </button>
+        </div>
 
-          {/* Clear Filters Reset */}
-          {(filters.search || filters.role || filters.location || filters.ats || filters.remoteOnly || filters.minScore > 0) && (
-            <button
-              onClick={() =>
-                setFilters({
-                  search: "",
-                  role: "",
-                  location: "",
-                  ats: "",
-                  remoteOnly: false,
-                  minScore: 0,
-                })
-              }
-              style={{
-                fontSize: "11px",
-                color: "var(--text-muted)",
-                textDecoration: "underline",
-                cursor: "pointer",
-                background: "transparent",
-                border: "none",
-                padding: "4px",
-              }}
-              title="Reset all filters to default"
-            >
-              Reset
-            </button>
-          )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+          <input
+            type="text"
+            aria-label="Role"
+            placeholder="Role (e.g. Backend, Frontend, ML)"
+            value={filters.role}
+            onChange={(e) => setFilters({ role: e.target.value })}
+            style={{ flex: "1 1 170px", maxWidth: "220px" }}
+          />
+          <input
+            type="text"
+            aria-label="Location"
+            placeholder="Location (e.g. Bengaluru, Remote)"
+            value={filters.location}
+            onChange={(e) => setFilters({ location: e.target.value })}
+            style={{ flex: "1 1 160px", maxWidth: "210px" }}
+          />
+          <select
+            aria-label="ATS or job board"
+            value={filters.ats}
+            onChange={(e) => setFilters({ ats: e.target.value })}
+            style={{ width: "170px" }}
+          >
+            <option value="">All ATS & boards</option>
+            {ATS_OPTIONS.map((o) => {
+              const count = data?.facets?.ats.find((b) => b.value === o.id)?.count;
+              return (
+                <option key={o.id} value={o.id}>
+                  {count !== undefined ? `${o.label} (${count})` : o.label}
+                </option>
+              );
+            })}
+          </select>
+          <select
+            aria-label="Posted within"
+            value={filters.postedWithin || "all"}
+            onChange={(e) => setFilters({ postedWithin: e.target.value as any })}
+            style={{ width: "140px" }}
+            title="Filter by when the position was posted"
+          >
+            <option value="all">Any time</option>
+            <option value="4h">Past 4 hours</option>
+            <option value="9h">Past 9 hours</option>
+            <option value="24h">Past 24 hours</option>
+            <option value="3d">Past 3 days</option>
+            <option value="7d">Past week</option>
+            <option value="30d">Past month</option>
+          </select>
+          <label style={quickToggleStyle(filters.remoteOnly)}>
+            <input
+              type="checkbox"
+              checked={filters.remoteOnly}
+              onChange={(e) => setFilters({ remoteOnly: e.target.checked })}
+            />
+            <span>Remote only</span>
+          </label>
+          <label
+            style={quickToggleStyle(filters.hideApplied !== false)}
+            title="Exclude positions already tracked or applied on your Kanban board"
+          >
+            <input
+              type="checkbox"
+              checked={filters.hideApplied !== false}
+              onChange={(e) => setFilters({ hideApplied: e.target.checked })}
+            />
+            <span>Hide applied</span>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap", fontSize: "12px", color: "var(--text-muted)" }}>
+            <span>Min match: {filters.minScore}%</span>
+            <input
+              type="range"
+              min="0"
+              max="95"
+              step="5"
+              value={filters.minScore}
+              onChange={(e) => setFilters({ minScore: parseInt(e.target.value, 10) })}
+              style={{ width: "85px", cursor: "pointer" }}
+            />
+          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
+            <AdvancedFiltersToggle
+              open={showAdvanced}
+              activeCount={advancedChips.length}
+              onToggle={() => setShowAdvanced(!showAdvanced)}
+            />
+            {activeChips.length > 0 && (
+              <button
+                className="btn btn-ghost"
+                onClick={resetFilters}
+                style={{ fontSize: "12px", padding: "6px 10px" }}
+                title="Reset all filters to default"
+              >
+                Reset all
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {showAdvanced && (
+        <AdvancedFiltersPanel
+          value={filters.advanced}
+          onChange={(advanced) => setFilters({ advanced })}
+          facets={data?.facets}
+        />
+      )}
 
       {/* Agentic Deep Search & Company Intelligence Panel */}
       {showAgentSearch && (
@@ -1662,36 +1740,63 @@ export const JobsView: React.FC = () => {
         </div>
       )}
 
-      {/* Results Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-          Found{" "}
-          <span style={{ color: "var(--accent-cyan)", fontWeight: 600, fontFamily: "var(--font-mono)" }}>
-            {data?.pagination?.total ?? data?.total ?? jobsList.length ?? 0}
-          </span>{" "}
-          verified positions
-        </div>
+      <LiveFeed open={showLiveFeed} onClose={() => setShowLiveFeed(false)} onJobsAdded={() => void refetch()} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Sort by:</span>
-          <select
-            value={filters.sortBy}
-            onChange={(e) => setFilters({ sortBy: e.target.value as any })}
-            style={{ padding: "4px 8px", fontSize: "12px" }}
-          >
-            <option value="matchScore">Highest Match Score</option>
-            <option value="postedAt">Most Recent</option>
-            <option value="salary">Highest Salary</option>
-          </select>
+      {/* Results Header */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ fontSize: "14px", color: "var(--text-secondary)" }} aria-live="polite">
+            <span style={{ color: "var(--text-primary)", fontWeight: 700, fontFamily: "var(--font-mono)", fontSize: "16px" }}>
+              {totalPositions.toLocaleString()}
+            </span>{" "}
+            {totalPositions === 1 ? "position" : "positions"}
+            {activeChips.length > 0 && (
+              <span style={{ color: "var(--text-muted)" }}>
+                {" "}· {activeChips.length} filter{activeChips.length === 1 ? "" : "s"} applied
+              </span>
+            )}
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--text-muted)" }}>
+            Sort by
+            <select
+              value={filters.sortBy}
+              onChange={(e) => setFilters({ sortBy: e.target.value as any })}
+              style={{ padding: "4px 8px", fontSize: "12px" }}
+            >
+              <option value="matchScore">Highest Match Score</option>
+              <option value="postedAt">Most Recent</option>
+              <option value="salary">Highest Salary</option>
+              <option value="relevance">Most Relevant (needs search)</option>
+            </select>
+          </label>
         </div>
+        <ActiveFilterChips chips={activeChips} onClear={(chip) => setFilters(chip.clear)} />
       </div>
 
       {/* Jobs List */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }} aria-busy={isLoading}>
         {isLoading ? (
-          <div style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)" }}>
-            Scanning and matching verified jobs...
-          </div>
+          Array.from({ length: 5 }, (_, i) => (
+            <div
+              key={i}
+              className="glass-panel"
+              aria-hidden="true"
+              style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: "18px", borderRadius: "var(--radius-lg)" }}
+            >
+              <div className="skeleton-shimmer" style={{ width: "44px", height: "44px", borderRadius: "var(--radius-full)", flexShrink: 0 }} />
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div className="skeleton-shimmer" style={{ height: "14px", width: `${55 - i * 4}%` }} />
+                <div className="skeleton-shimmer" style={{ height: "11px", width: "35%" }} />
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <div className="skeleton-shimmer" style={{ height: "18px", width: "60px" }} />
+                  <div className="skeleton-shimmer" style={{ height: "18px", width: "72px" }} />
+                  <div className="skeleton-shimmer" style={{ height: "18px", width: "50px" }} />
+                </div>
+              </div>
+              <div className="skeleton-shimmer" style={{ height: "30px", width: "92px", flexShrink: 0 }} />
+            </div>
+          ))
         ) : jobsList.length > 0 ? (
           jobsList.map((job: any) => {
             const rawScore = job.match?.overall ?? job.matchScore ?? 85;
@@ -1908,6 +2013,16 @@ export const JobsView: React.FC = () => {
           >
             <Briefcase size={40} color="var(--accent-cyan)" />
             <div style={{ fontSize: "16px", fontWeight: 600 }}>No jobs found for these criteria</div>
+            {activeChips.length > 0 && (
+              <div style={{ fontSize: "13px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
+                <span>
+                  {activeChips.length} filter{activeChips.length === 1 ? " is" : "s are"} narrowing the results.
+                </span>
+                <button className="btn btn-secondary" onClick={resetFilters} style={{ fontSize: "12px", padding: "5px 12px" }}>
+                  Clear all filters
+                </button>
+              </div>
+            )}
             <div style={{ fontSize: "13px", color: "var(--text-muted)", maxWidth: "460px", lineHeight: "1.5" }}>
               Would you like to search the public web and scrape live LinkedIn postings for{" "}
               <strong style={{ color: "var(--accent-cyan)" }}>
@@ -2035,6 +2150,13 @@ export const JobsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      <AutoApplyLauncher
+        isOpen={showLauncher}
+        onClose={() => setShowLauncher(false)}
+        jobIds={launcherIds}
+        totalMatching={launcherTotal}
+      />
 
       {/* Auto-Apply Modal */}
       {autoApplyJob && (

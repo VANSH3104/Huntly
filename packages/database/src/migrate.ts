@@ -175,6 +175,25 @@ function getTableDDL(): string[] {
       updated_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
     )`,
 
+    `CREATE TABLE IF NOT EXISTS apply_queue (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'queued',
+      mode TEXT NOT NULL DEFAULT 'auto_submit',
+      resume_id TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      ats TEXT,
+      reason TEXT,
+      screenshot TEXT,
+      fields_json TEXT NOT NULL DEFAULT '[]',
+      unfilled_json TEXT NOT NULL DEFAULT '[]',
+      logs_json TEXT NOT NULL DEFAULT '[]',
+      queued_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
+      started_at INTEGER,
+      finished_at INTEGER,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
+    )`,
+
     `CREATE TABLE IF NOT EXISTS crawl_runs (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
@@ -260,6 +279,14 @@ function getIndexDDL(): string[] {
     `CREATE INDEX IF NOT EXISTS idx_crawl_events_run_id ON crawl_events(crawl_run_id)`,
     `CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status)`,
     `CREATE INDEX IF NOT EXISTS idx_applications_job_id ON applications(job_id)`,
+    `DELETE FROM applications WHERE rowid IN (
+      SELECT a.rowid FROM applications a JOIN applications b
+        ON a.job_id = b.job_id AND a.rowid <> b.rowid
+       AND ((b.status <> 'saved' AND a.status = 'saved')
+         OR ((b.status = 'saved') = (a.status = 'saved') AND b.rowid < a.rowid))
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_applications_job_unique ON applications(job_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_apply_queue_status ON apply_queue(status, queued_at)`,
     `CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read, created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_companies_domain ON companies(domain)`,
     `CREATE INDEX IF NOT EXISTS idx_job_skills_job_id ON job_skills(job_id)`,

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { NavTab, JobFilterState } from "../types";
+import type { NavTab, JobFilterState, AdvancedJobFilters } from "../types";
 
 export type ThemeId =
   | "soft-sand"
@@ -30,12 +30,33 @@ interface AppState {
   setIsCommandPaletteOpen: (open: boolean) => void;
 
   isNotificationPanelOpen: boolean;
+  isAutoApplyDockOpen: boolean;
+  setIsAutoApplyDockOpen: (open: boolean) => void;
   setIsNotificationPanelOpen: (open: boolean) => void;
 
   theme: ThemeId;
   setTheme: (theme: ThemeId) => void;
   toggleTheme: () => void;
 }
+
+export const defaultAdvancedFilters: AdvancedJobFilters = {
+  excludeKeywords: "",
+  includeCompanies: "",
+  excludeCompanies: "",
+  titleOnly: false,
+  includeDescription: false,
+  searchMode: "any",
+  exactWord: false,
+  skillsMode: "any",
+  employmentType: [],
+  experienceMin: null,
+  experienceMax: null,
+  salaryMin: null,
+  hasSalary: false,
+  country: "",
+  visaSponsorship: false,
+  postedAfter: "",
+};
 
 const defaultFilters: JobFilterState = {
   search: "",
@@ -65,7 +86,30 @@ const defaultFilters: JobFilterState = {
   sortOrder: "desc",
   postedWithin: "all",
   hideApplied: true,
+  advanced: defaultAdvancedFilters,
 };
+
+const FILTERS_STORAGE_KEY = "agentforge-job-filters";
+
+// Merges over defaults so filters saved by an older build still get new fields.
+function loadFilters(): JobFilterState {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return defaultFilters;
+    const saved = JSON.parse(raw) as Partial<JobFilterState>;
+    return { ...defaultFilters, ...saved, advanced: { ...defaultAdvancedFilters, ...saved.advanced } };
+  } catch {
+    return defaultFilters;
+  }
+}
+
+function saveFilters(filters: JobFilterState): void {
+  try {
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  } catch {
+    // storage blocked or full; filters still work for this session
+  }
+}
 
 const getInitialTheme = (): ThemeId => {
   if (typeof window !== "undefined") {
@@ -84,10 +128,17 @@ export const useStore = create<AppState>((set) => ({
   currentTab: "dashboard",
   setCurrentTab: (tab) => set({ currentTab: tab }),
 
-  filters: defaultFilters,
+  filters: loadFilters(),
   setFilters: (newFilters) =>
-    set((state) => ({ filters: { ...state.filters, ...newFilters } })),
-  resetFilters: () => set({ filters: defaultFilters }),
+    set((state) => {
+      const filters = { ...state.filters, ...newFilters };
+      saveFilters(filters);
+      return { filters };
+    }),
+  resetFilters: () => {
+    saveFilters(defaultFilters);
+    set({ filters: defaultFilters });
+  },
 
   selectedJobId: null,
   setSelectedJobId: (id) =>
@@ -104,6 +155,8 @@ export const useStore = create<AppState>((set) => ({
   setIsCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
 
   isNotificationPanelOpen: false,
+  isAutoApplyDockOpen: false,
+  setIsAutoApplyDockOpen: (open) => set({ isAutoApplyDockOpen: open }),
   setIsNotificationPanelOpen: (open) =>
     set({ isNotificationPanelOpen: open }),
 

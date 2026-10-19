@@ -1,5 +1,75 @@
 const API_BASE = "/api";
 
+export type AutoApplyStatus =
+  | "queued"
+  | "running"
+  | "needs_review"
+  | "needs_login"
+  | "skipped"
+  | "submitted"
+  | "failed";
+
+export interface AutoApplyConfig {
+  mode: "review" | "auto_submit";
+  headless: boolean;
+  dailyCap: number;
+  delayMs: number;
+  maxPerRun: number;
+  onLogin: "skip" | "wait";
+  fillGaps: boolean;
+  onCaptcha: "wait" | "skip";
+}
+
+export interface AutoApplyQueueItem {
+  id: string;
+  jobId: string;
+  title: string;
+  company: string;
+  applyUrl: string;
+  status: AutoApplyStatus;
+  mode: string;
+  attempts: number;
+  ats: string | null;
+  reason: string | null;
+  screenshot: string | null;
+  unfilled: string[];
+  logs: string[];
+  queuedAt: number;
+  finishedAt: number | null;
+}
+
+export interface AutoApplyQueueState {
+  items: AutoApplyQueueItem[];
+  stats: Record<AutoApplyStatus, number>;
+  paused: boolean;
+  config: AutoApplyConfig;
+  submittedToday: number;
+}
+
+export type FacetBucket = { value: string; count: number };
+export type JobFacets = Record<"ats" | "employmentType" | "country" | "company", FacetBucket[]>;
+
+export interface BoardScrapeResult {
+  success: true;
+  scraped: number;
+  added: number;
+  updated: number;
+  perBoard: Array<{ board: string; fetched: number; added: number; error?: string }>;
+}
+
+export interface LiveCrawlEvent {
+  type: "board_start" | "board_done" | "job_added" | "error";
+  board: string;
+  at: string | number;
+  title?: string;
+  company?: string;
+  url?: string;
+  location?: string;
+  fetched?: number;
+  added?: number;
+  message?: string;
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const response = await fetch(url, {
@@ -40,6 +110,7 @@ export const api = {
         page?: number;
         pageSize?: number;
         pagination?: { total: number; page: number; limit: number; pages: number };
+        facets?: JobFacets;
       }>(
         `/jobs?${query.toString()}`
       );
@@ -202,6 +273,10 @@ export const api = {
       }),
     events: (limit = 50) => request<any[]>(`/crawl/events?limit=${limit}`),
     runs: () => request<any[]>("/crawl/runs"),
+    listBoards: () => request<{ boards: Array<{ id: string; label: string }> }>("/crawl/boards"),
+    boards: (params: { keywords?: string; boards?: string[]; limit?: number }) =>
+      request<BoardScrapeResult>("/crawl/boards", { method: "POST", body: JSON.stringify(params) }),
+    liveUrl: () => `${API_BASE}/crawl/live`,
     discover: (params: { keywords?: string; role?: string; location?: string; remoteOnly?: boolean }) =>
       request<any>("/crawl/discover", { method: "POST", body: JSON.stringify(params) }),
     scrapeLinkedIn: (params: { keywords: string; location?: string; remoteOnly?: boolean }) =>
@@ -411,7 +486,8 @@ export const api = {
         company: string;
         url: string;
         atsType: string;
-        status: "ready_for_review" | "submitted" | "failed";
+        status: "ready_for_review" | "submitted" | "needs_review" | "needs_login" | "skipped" | "already_applied" | "failed";
+        reason?: string;
         fieldsFilled: Array<{ field: string; label: string; value: string; type: string }>;
         screenshotBase64?: string;
         screenshotPath?: string;
@@ -434,6 +510,44 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    queue: () => request<AutoApplyQueueState>("/auto-apply/queue"),
+    previewQueue: (jobIds: string[]) =>
+      request<{ total: number; fresh: number; skipped: Array<{ jobId: string; reason: string }> }>(
+        "/auto-apply/queue/preview",
+        { method: "POST", body: JSON.stringify({ jobIds }) }
+      ),
+    enqueue: (data: { jobIds: string[]; mode?: "review" | "auto_submit"; limit?: number; resumeId?: string }) =>
+      request<{ queued: string[]; skipped: Array<{ jobId: string; reason: string }> }>("/auto-apply/queue", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    pauseQueue: () => request<any>("/auto-apply/queue/pause", { method: "POST" }),
+    resumeQueue: () => request<any>("/auto-apply/queue/resume", { method: "POST" }),
+    cancelQueued: () => request<any>("/auto-apply/queue/cancel-queued", { method: "POST" }),
+    clearFailed: () => request<any>("/auto-apply/queue/clear-failed", { method: "POST" }),
+    retryItem: (id: string, opts: { force?: boolean; signIn?: boolean } = {}) =>
+      request<any>(`/auto-apply/queue/${id}/retry`, { method: "POST", body: JSON.stringify(opts) }),
+    rerun: (statuses: AutoApplyStatus[]) =>
+      request<any>("/auto-apply/queue/rerun", { method: "POST", body: JSON.stringify({ statuses }) }),
+    connectLinkedIn: () => request<{ started: boolean; message?: string }>("/auto-apply/linkedin/connect", { method: "POST" }),
+    markItemApplied: (id: string) => request<any>(`/auto-apply/queue/${id}/mark-applied`, { method: "POST" }),
+    removeItem: (id: string) => request<any>(`/auto-apply/queue/${id}`, { method: "DELETE" }),
+    readiness: () =>
+      request<{
+        profile: { fullName: string; email: string; phone: string; linkedinUrl: string; location: string };
+        needsCity: boolean;
+        missing: string[];
+        resumePdf: { size: number; updatedAt: number } | null;
+      }>("/auto-apply/readiness"),
+    uploadResumePdf: async (file: File) =>
+      request<{ ok: boolean }>("/auto-apply/resume-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/pdf" },
+        body: await file.arrayBuffer(),
+      }),
+    getConfig: () => request<AutoApplyConfig>("/auto-apply/config"),
+    saveConfig: (patch: Partial<AutoApplyConfig>) =>
+      request<AutoApplyConfig>("/auto-apply/config", { method: "PUT", body: JSON.stringify(patch) }),
     batch: (data: { jobIds: string[]; resumeId?: string; mode?: "review" | "auto_submit" }) =>
       request<{
         success: boolean;

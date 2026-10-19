@@ -13,3 +13,4 @@ src-tauri/target/
 *.tsbuildinfo
 endpoint-store.json
 apps/server/apps/
+/autoapply-files/

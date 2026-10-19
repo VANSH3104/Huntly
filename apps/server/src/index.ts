@@ -22,6 +22,7 @@ import { aiRouter } from "./routes/ai.js";
 import { intelRouter } from "./routes/intel.js";
 import { sandboxRouter } from "./routes/sandbox.js";
 import { autoApplyRouter } from "./routes/auto-apply.js";
+import { autoApplyQueue } from "./crawler/auto-applier/queue.js";
 
 // Workers
 import { WorkerOrchestrator } from "./workers/orchestrator.js";
@@ -71,6 +72,7 @@ async function bootstrap(): Promise<void> {
   // Start background worker orchestrator
   const orchestrator = new WorkerOrchestrator();
   orchestrator.start();
+  void autoApplyQueue.recover();
 
   app.listen(PORT, HOST, () => {
     console.log(`✓ AgentForge server listening on http://${HOST}:${PORT}`);
@@ -82,6 +84,18 @@ async function bootstrap(): Promise<void> {
     process.exit(0);
   });
 }
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Server] Unhandled rejection (kept running):", reason);
+});
+process.on("uncaughtException", (err) => {
+  // A server that could not bind its port is not running, so let the watcher restart it.
+  if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
+    console.error("[Server] Port already in use, exiting:", err.message);
+    process.exit(1);
+  }
+  console.error("[Server] Uncaught exception (kept running):", err);
+});
 
 bootstrap().catch((err) => {
   console.error("Failed to start server:", err);

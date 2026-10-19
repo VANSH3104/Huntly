@@ -52,10 +52,33 @@ export interface JobFilterState {
   minScore: number;
   ats: string;
   status: "all" | "active" | "stale" | "closed";
-  sortBy: "matchScore" | "postedAt" | "company" | "salary" | "newest" | "views";
+  sortBy: "matchScore" | "postedAt" | "company" | "salary" | "newest" | "views" | "relevance";
   sortOrder: "asc" | "desc";
   postedWithin?: string;
   hideApplied?: boolean;
+  advanced: AdvancedJobFilters;
+}
+
+export type EmploymentType = "full-time" | "part-time" | "contract" | "internship" | "freelance";
+
+// Mirrors the advanced query params of GET /api/jobs; list fields are sent comma-joined.
+export interface AdvancedJobFilters {
+  excludeKeywords: string;
+  includeCompanies: string;
+  excludeCompanies: string;
+  titleOnly: boolean;
+  includeDescription: boolean;
+  searchMode: "any" | "all";
+  exactWord: boolean;
+  skillsMode: "any" | "all";
+  employmentType: EmploymentType[];
+  experienceMin: number | null;
+  experienceMax: number | null;
+  salaryMin: number | null;
+  hasSalary: boolean;
+  country: string;
+  visaSponsorship: boolean;
+  postedAfter: string;
 }
 
 export interface DashboardStats {

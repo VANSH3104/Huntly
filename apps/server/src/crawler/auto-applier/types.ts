@@ -62,6 +62,8 @@ export type FormFieldCategory =
   | "race"
   | "veteran"
   | "disability"
+  | "consent"
+  | "referral_source"
   | "custom_question"
   | "unknown";
 
@@ -90,6 +92,11 @@ export interface AutoApplyOptions {
   resumeId?: string;
   mode: "review" | "auto_submit";
   profileOverrides?: Partial<ApplicantProfile>;
+  /** Submit even if required fields could not be filled (the user accepted the risk). */
+  forceSubmit?: boolean;
+  headless?: boolean;
+  /** Open a visible browser and wait for the user when a site needs a login. */
+  waitForLogin?: boolean;
 }
 
 export interface AutoApplyResult {
@@ -98,7 +105,10 @@ export interface AutoApplyResult {
   company: string;
   url: string;
   atsType: ATSSystemType;
-  status: "ready_for_review" | "submitted" | "failed";
+  status: "ready_for_review" | "submitted" | "needs_review" | "needs_login" | "skipped" | "already_applied" | "failed";
+  /** Why the run stopped short of a confirmed submission. */
+  reason?: string;
+  unfilledFields?: string[];
   fieldsFilled: FieldFillRecord[];
   screenshotBase64?: string;
   screenshotPath?: string;
