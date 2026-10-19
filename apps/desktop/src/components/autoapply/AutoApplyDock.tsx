@@ -21,10 +21,11 @@ import {
 import { api, type AutoApplyQueueItem, type AutoApplyStatus } from "../../lib/api";
 import { useStore } from "../../store/useStore";
 
-type Tab = "all" | "active" | "review" | "skipped" | "done" | "failed";
+type Tab = "all" | "active" | "open" | "review" | "skipped" | "done" | "failed";
 
 const STATUS: Record<AutoApplyStatus, { label: string; color: string; icon: React.ReactNode }> = {
   queued: { label: "Queued", color: "var(--text-muted)", icon: <Clock size={14} /> },
+  open: { label: "Open in browser", color: "var(--accent-cyan)", icon: <ExternalLink size={14} /> },
   running: { label: "Applying", color: "var(--accent-indigo)", icon: <Loader2 size={14} className="animate-spin" /> },
   needs_review: { label: "Needs you", color: "var(--accent-amber)", icon: <AlertTriangle size={14} /> },
   needs_login: { label: "Needs sign-in", color: "var(--accent-amber)", icon: <LogIn size={14} /> },
@@ -74,12 +75,13 @@ export const AutoApplyDock: React.FC = () => {
   const { stats, items, paused, submittedToday, config } = data;
   const total = items.length;
   const parked = stats.skipped + stats.needs_login;
-  const finished = stats.submitted + stats.failed + stats.needs_review + parked;
+  const finished = stats.submitted + stats.failed + stats.needs_review + parked + stats.open;
   const working = stats.running + stats.queued;
   const pct = total ? Math.round((finished / total) * 100) : 0;
 
   const visible = items.filter((i) => {
     if (tab === "active") return i.status === "running" || i.status === "queued";
+    if (tab === "open") return i.status === "open";
     if (tab === "review") return i.status === "needs_review";
     if (tab === "skipped") return i.status === "skipped" || i.status === "needs_login";
     if (tab === "done") return i.status === "submitted";
@@ -114,6 +116,7 @@ export const AutoApplyDock: React.FC = () => {
         <span>
           Auto-Apply · {stats.submitted} applied
           {working > 0 ? ` · ${working} left` : ""}
+          {stats.open > 0 ? ` · ${stats.open} open for you` : ""}
           {stats.needs_review > 0 ? ` · ${stats.needs_review} need you` : ""}
           {parked > 0 ? ` · ${parked} skipped` : ""}
         </span>
@@ -124,6 +127,7 @@ export const AutoApplyDock: React.FC = () => {
   const tabs: Array<[Tab, string, number]> = [
     ["all", "All", total],
     ["active", "Active", working],
+    ["open", "Open tabs", stats.open],
     ["review", "Needs you", stats.needs_review],
     ["skipped", "Skipped / sign-in", parked],
     ["done", "Applied", stats.submitted],
@@ -288,6 +292,20 @@ const QueueRow: React.FC<{
             <a href={item.applyUrl} target="_blank" rel="noreferrer" style={smallBtn}>
               <ExternalLink size={12} /> Open page
             </a>
+            {item.status === "open" && (
+              <>
+                <button
+                  style={{ ...smallBtn, borderColor: "var(--border-active)", color: "var(--accent-indigo)", fontWeight: 600 }}
+                  onClick={() => onAct(() => api.autoApply.focusItem(item.id))}
+                  title="Switch to this job's tab in the browser window"
+                >
+                  <ExternalLink size={12} /> Show tab
+                </button>
+                <button style={smallBtn} onClick={() => onAct(() => api.autoApply.markItemApplied(item.id))} title="You submitted it yourself. Put it on the board.">
+                  <CheckCircle2 size={12} /> I submitted it
+                </button>
+              </>
+            )}
             {item.status === "needs_review" && /captcha/i.test(item.reason ?? "") && (
               <button
                 style={{ ...smallBtn, borderColor: "var(--border-active)", color: "var(--accent-indigo)", fontWeight: 600 }}
@@ -330,7 +348,7 @@ const QueueRow: React.FC<{
             )}
             {item.status !== "running" && item.status !== "submitted" && (
               <button style={smallBtn} onClick={() => onAct(() => api.autoApply.removeItem(item.id))}>
-                <Trash2 size={12} /> Remove
+                <Trash2 size={12} /> {item.status === "open" ? "Close tab" : "Remove"}
               </button>
             )}
           </div>

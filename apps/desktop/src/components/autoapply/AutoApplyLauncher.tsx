@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Zap, X, ShieldCheck, Eye, Loader2, CheckCircle2, SkipForward, FileUp, AlertTriangle, LogIn } from "lucide-react";
+import { Zap, X, ShieldCheck, Eye, Loader2, CheckCircle2, SkipForward, FileUp, AlertTriangle, LogIn, ExternalLink } from "lucide-react";
 import { api, type AutoApplyConfig } from "../../lib/api";
 import { useStore } from "../../store/useStore";
 
@@ -230,9 +230,18 @@ export const AutoApplyLauncher: React.FC<Props> = ({ isOpen, onClose, jobIds, to
         )}
 
         <div style={{ display: "flex", gap: "10px" }}>
-          {modeCard("auto_submit", "Fully automatic", "Fills and submits. Stops on anything unclear and asks you.", <Zap size={14} color="var(--accent-emerald)" />)}
-          {modeCard("review", "Review first", "Fills every form but waits for your approval to submit.", <Eye size={14} color="var(--accent-indigo)" />)}
+          {modeCard("tabs", "Fill & leave open", "Recommended. Fills each job in a browser tab. You glance and click Submit.", <ExternalLink size={14} color="var(--accent-indigo)" />)}
+          {modeCard("auto_submit", "Fully automatic", "Fills and submits by itself. Best for clean forms.", <Zap size={14} color="var(--accent-emerald)" />)}
+          {modeCard("review", "Preview only", "Fills and shows a screenshot, then closes. Nothing is sent.", <Eye size={14} color="var(--text-muted)" />)}
         </div>
+
+        {config.mode === "tabs" && (
+          <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "var(--text-secondary)" }}>
+            Tabs open at once
+            <input type="number" min={1} max={30} value={config.tabBatch} onChange={(e) => setConfig({ ...config, tabBatch: Math.max(1, Math.min(30, Number(e.target.value) || 1)) })} style={{ ...field, width: "80px" }} />
+            <span style={{ color: "var(--text-muted)" }}>The next jobs open as you submit or close tabs.</span>
+          </label>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--text-secondary)" }}>
@@ -315,7 +324,7 @@ export const AutoApplyLauncher: React.FC<Props> = ({ isOpen, onClose, jobIds, to
           </button>
           <button className="btn btn-primary" onClick={start} disabled={starting || !preview || fresh === 0}>
             {starting ? <Loader2 size={14} className="animate-spin" /> : fresh === 0 && preview ? <SkipForward size={14} /> : <CheckCircle2 size={14} />}
-            <span>{preview && fresh === 0 ? "Nothing new to apply" : `Start applying to ${willApply} jobs`}</span>
+            <span>{preview && fresh === 0 ? "Nothing new to apply" : config.mode === "tabs" ? `Open ${willApply} jobs in the browser` : `Start applying to ${willApply} jobs`}</span>
           </button>
         </div>
       </div>

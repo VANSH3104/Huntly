@@ -6,7 +6,15 @@ import { AppliedIndex } from "./applied-index.js";
 import { getAutoApplyConfig } from "./config.js";
 import type { AutoApplyResult } from "./types.js";
 
-export type QueueStatus = "queued" | "running" | "needs_review" | "needs_login" | "skipped" | "submitted" | "failed";
+export type QueueStatus =
+  | "queued"
+  | "running"
+  | "open"
+  | "needs_review"
+  | "needs_login"
+  | "skipped"
+  | "submitted"
+  | "failed";
 
 const BLOCKED: QueueStatus[] = ["needs_review", "needs_login", "skipped", "failed"];
 
@@ -40,6 +48,14 @@ export class AutoApplyQueue {
   public async recover() {
     const db = getDatabase();
     await db.update(applyQueue).set({ status: "queued", updatedAt: new Date() }).where(eq(applyQueue.status, "running"));
+    // Tabs do not survive a server restart. Park them so the user can reopen them on purpose.
+    await db
+      .update(applyQueue)
+      .set({ status: "needs_review", reason: "The browser tab was closed when the server restarted. Re-run to reopen it.", updatedAt: new Date() })
+      .where(eq(applyQueue.status, "open"));
+    defaultAutoApplier.events.on("tab", (e: { jobId: string; outcome: "submitted" | "closed"; applicationId?: string }) => {
+      void this.onTabEvent(e).catch((err) => console.error("[AutoApplyQueue] Tab event failed:", err));
+    });
     this.kick();
   }
 
@@ -88,7 +104,7 @@ export class AutoApplyQueue {
         continue;
       }
       const existing = queueById.get(id);
-      if (existing && ["queued", "running", "needs_review"].includes(existing.status)) {
+      if (existing && ["queued", "running", "open", "needs_review"].includes(existing.status)) {
         skipped.push({ jobId: id, reason: `Already in the auto-apply queue (${existing.status})` });
         continue;
       }
@@ -101,7 +117,7 @@ export class AutoApplyQueue {
 
   public async enqueue(
     jobIds: string[],
-    opts: { mode?: "review" | "auto_submit"; resumeId?: string; limit?: number } = {}
+    opts: { mode?: "tabs" | "review" | "auto_submit"; resumeId?: string; limit?: number } = {}
   ): Promise<EnqueueOutcome> {
     const config = await getAutoApplyConfig();
     const { fresh, skipped } = await this.classify(jobIds);
@@ -140,7 +156,7 @@ export class AutoApplyQueue {
       .update(applyQueue)
       .set({
         status: "queued",
-        mode: "auto_submit",
+        mode: opts.force ? "auto_submit" : (await getAutoApplyConfig()).mode,
         // the worker reads this token: "force" submits with gaps, "signin" opens a visible browser and waits
         reason: opts.signIn ? "signin" : opts.force ? "force" : null,
         attempts: 0,
@@ -160,7 +176,7 @@ export class AutoApplyQueue {
     if (allowed.length === 0) return;
     await db
       .update(applyQueue)
-      .set({ status: "queued", mode: "auto_submit", reason: null, attempts: 0, queuedAt: new Date(), finishedAt: null, updatedAt: new Date() })
+      .set({ status: "queued", mode: (await getAutoApplyConfig()).mode, reason: null, attempts: 0, queuedAt: new Date(), finishedAt: null, updatedAt: new Date() })
       .where(inArray(applyQueue.status, allowed));
     this.kick();
   }
@@ -170,6 +186,7 @@ export class AutoApplyQueue {
     const db = getDatabase();
     const [row] = await db.select().from(applyQueue).where(eq(applyQueue.id, id)).limit(1);
     if (!row) return;
+    await defaultAutoApplier.closeTab(row.jobId);
     const [existing] = await db.select({ id: applications.id }).from(applications).where(eq(applications.jobId, row.jobId)).limit(1);
     const notes = "Marked as applied manually after auto-apply review.";
     if (existing) {
@@ -182,7 +199,33 @@ export class AutoApplyQueue {
 
   public async remove(id: string) {
     const db = getDatabase();
-    await db.delete(applyQueue).where(and(eq(applyQueue.id, id), inArray(applyQueue.status, ["queued", ...BLOCKED])));
+    const [row] = await db.select().from(applyQueue).where(eq(applyQueue.id, id)).limit(1);
+    if (row?.status === "open") await defaultAutoApplier.closeTab(row.jobId);
+    await db.delete(applyQueue).where(and(eq(applyQueue.id, id), inArray(applyQueue.status, ["queued", "open", ...BLOCKED])));
+  }
+
+  public async focus(id: string) {
+    const db = getDatabase();
+    const [row] = await db.select().from(applyQueue).where(eq(applyQueue.id, id)).limit(1);
+    return row ? defaultAutoApplier.focusTab(row.jobId) : false;
+  }
+
+  /** The user submitted (or closed) a tab we left open. */
+  private async onTabEvent(e: { jobId: string; outcome: "submitted" | "closed" }) {
+    const db = getDatabase();
+    if (e.outcome === "submitted") {
+      await db
+        .update(applyQueue)
+        .set({ status: "submitted", reason: null, finishedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(applyQueue.jobId, e.jobId), eq(applyQueue.status, "open")));
+    } else {
+      await db
+        .update(applyQueue)
+        .set({ status: "needs_review", reason: "You closed the tab before submitting.", finishedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(applyQueue.jobId, e.jobId), eq(applyQueue.status, "open")));
+    }
+    // a tab slot is free again
+    this.kick();
   }
 
   public async clearFinished() {
@@ -223,7 +266,7 @@ export class AutoApplyQueue {
       finishedAt: q.finishedAt,
     }));
 
-    const stats = { queued: 0, running: 0, needs_review: 0, needs_login: 0, skipped: 0, submitted: 0, failed: 0 } as Record<QueueStatus, number>;
+    const stats = { queued: 0, running: 0, open: 0, needs_review: 0, needs_login: 0, skipped: 0, submitted: 0, failed: 0 } as Record<QueueStatus, number>;
     for (const it of items) stats[it.status]++;
 
     const config = await getAutoApplyConfig();
@@ -255,6 +298,13 @@ export class AutoApplyQueue {
         return;
       }
 
+      // In tabs mode, wait for the user to deal with some open tabs before opening more.
+      const [{ open }] = await db
+        .select({ open: sql<number>`count(*)` })
+        .from(applyQueue)
+        .where(eq(applyQueue.status, "open"));
+      if (config.mode === "tabs" && Number(open) >= config.tabBatch) return;
+
       const [next] = await db
         .select()
         .from(applyQueue)
@@ -275,7 +325,7 @@ export class AutoApplyQueue {
         result = await defaultAutoApplier.executeAutoApply({
           jobId: next.jobId,
           resumeId: next.resumeId ?? undefined,
-          mode: next.mode === "review" ? "review" : "auto_submit",
+          mode: next.mode === "tabs" || next.mode === "review" ? next.mode : "auto_submit",
           forceSubmit: force,
           waitForLogin: signIn ? true : undefined,
         });
@@ -320,6 +370,9 @@ export class AutoApplyQueue {
         }
         status = "needs_review";
         break;
+      case "awaiting_user":
+        status = "open";
+        break;
       case "needs_login":
         status = "needs_login";
         break;
@@ -339,7 +392,7 @@ export class AutoApplyQueue {
         fieldsJson: JSON.stringify(r.fieldsFilled.map((f) => ({ label: f.label, value: f.value.slice(0, 200), type: f.type }))),
         unfilledJson: JSON.stringify(r.unfilledFields ?? []),
         logsJson: JSON.stringify(r.logs.slice(-60)),
-        finishedAt: status === "queued" ? null : new Date(),
+        finishedAt: status === "queued" || status === "open" ? null : new Date(),
         updatedAt: new Date(),
       })
       .where(eq(applyQueue.id, id));

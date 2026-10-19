@@ -90,7 +90,7 @@ export interface FieldFillRecord {
 export interface AutoApplyOptions {
   jobId: string;
   resumeId?: string;
-  mode: "review" | "auto_submit";
+  mode: "tabs" | "review" | "auto_submit";
   profileOverrides?: Partial<ApplicantProfile>;
   /** Submit even if required fields could not be filled (the user accepted the risk). */
   forceSubmit?: boolean;
@@ -105,7 +105,7 @@ export interface AutoApplyResult {
   company: string;
   url: string;
   atsType: ATSSystemType;
-  status: "ready_for_review" | "submitted" | "needs_review" | "needs_login" | "skipped" | "already_applied" | "failed";
+  status: "ready_for_review" | "submitted" | "needs_review" | "needs_login" | "skipped" | "awaiting_user" | "already_applied" | "failed";
   /** Why the run stopped short of a confirmed submission. */
   reason?: string;
   unfilledFields?: string[];

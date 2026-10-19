@@ -3,6 +3,7 @@ const API_BASE = "/api";
 export type AutoApplyStatus =
   | "queued"
   | "running"
+  | "open"
   | "needs_review"
   | "needs_login"
   | "skipped"
@@ -10,7 +11,8 @@ export type AutoApplyStatus =
   | "failed";
 
 export interface AutoApplyConfig {
-  mode: "review" | "auto_submit";
+  mode: "tabs" | "review" | "auto_submit";
+  tabBatch: number;
   headless: boolean;
   dailyCap: number;
   delayMs: number;
@@ -516,7 +518,7 @@ export const api = {
         "/auto-apply/queue/preview",
         { method: "POST", body: JSON.stringify({ jobIds }) }
       ),
-    enqueue: (data: { jobIds: string[]; mode?: "review" | "auto_submit"; limit?: number; resumeId?: string }) =>
+    enqueue: (data: { jobIds: string[]; mode?: "tabs" | "review" | "auto_submit"; limit?: number; resumeId?: string }) =>
       request<{ queued: string[]; skipped: Array<{ jobId: string; reason: string }> }>("/auto-apply/queue", {
         method: "POST",
         body: JSON.stringify(data),
@@ -530,6 +532,7 @@ export const api = {
     rerun: (statuses: AutoApplyStatus[]) =>
       request<any>("/auto-apply/queue/rerun", { method: "POST", body: JSON.stringify({ statuses }) }),
     connectLinkedIn: () => request<{ started: boolean; message?: string }>("/auto-apply/linkedin/connect", { method: "POST" }),
+    focusItem: (id: string) => request<{ ok: boolean }>(`/auto-apply/queue/${id}/focus`, { method: "POST" }),
     markItemApplied: (id: string) => request<any>(`/auto-apply/queue/${id}/mark-applied`, { method: "POST" }),
     removeItem: (id: string) => request<any>(`/auto-apply/queue/${id}`, { method: "DELETE" }),
     readiness: () =>

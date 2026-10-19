@@ -146,7 +146,7 @@ autoApplyRouter.post("/batch", async (req: Request, res: Response, next: NextFun
 const enqueueSchema = z.object({
   jobIds: z.array(z.string()).min(1).max(1000),
   resumeId: z.string().optional(),
-  mode: z.enum(["review", "auto_submit"]).optional(),
+  mode: z.enum(["tabs", "review", "auto_submit"]).optional(),
   limit: z.number().int().min(1).max(500).optional(),
 });
 
@@ -225,6 +225,14 @@ autoApplyRouter.post("/queue/:id/retry", async (req: Request, res: Response, nex
     const opts = z.object({ force: z.boolean().optional(), signIn: z.boolean().optional() }).parse(req.body ?? {});
     await autoApplyQueue.retry(String(req.params["id"]), opts);
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+autoApplyRouter.post("/queue/:id/focus", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ ok: await autoApplyQueue.focus(String(req.params["id"])) });
   } catch (err) {
     next(err);
   }

@@ -16,7 +16,9 @@ import {
 import { detectATS } from "./ats-detector.js";
 import { AppliedIndex } from "./applied-index.js";
 import { getAutoApplyConfig } from "./config.js";
-import { getUploadedResume, browserProfileDir } from "./resume-file.js";
+import { getUploadedResume } from "./resume-file.js";
+import { browserSession } from "./browser-session.js";
+import { EventEmitter } from "node:events";
 import { GeminiClient } from "../../services/gemini.js";
 import { formAnalyzer } from "./form-analyzer.js";
 import { aiAnswerGenerator } from "./ai-answer-generator.js";
@@ -186,6 +188,61 @@ export class AutoApplierEngine {
 
   private lock: Promise<void> = Promise.resolve();
 
+  /** Emits {jobId, outcome, applicationId} when the user submits or closes a tab that was left open. */
+  public readonly events = new EventEmitter();
+  private tabs = new Map<string, Page>();
+
+  public async focusTab(jobId: string): Promise<boolean> {
+    const page = this.tabs.get(jobId);
+    if (!page || page.isClosed()) return false;
+    await page.bringToFront().catch(() => {});
+    return true;
+  }
+
+  public async closeTab(jobId: string): Promise<void> {
+    const page = this.tabs.get(jobId);
+    this.tabs.delete(jobId);
+    if (page && !page.isClosed()) await page.close().catch(() => {});
+  }
+
+  /**
+   * Watches a tab left open for the user. A confirmation page means they submitted, a closed tab means they gave up.
+   */
+  private watchTab(page: Page, jobId: string, resumeId: string | undefined, ats: string, fieldCount: number): void {
+    this.tabs.set(jobId, page);
+    const baseline = page.url();
+    let done = false;
+    let timer: NodeJS.Timeout | null = null;
+    const finish = async (outcome: "submitted" | "closed") => {
+      if (done) return;
+      done = true;
+      if (timer) clearInterval(timer);
+      this.tabs.delete(jobId);
+      let applicationId: string | undefined;
+      if (outcome === "submitted") {
+        applicationId = await this.recordApplication(jobId, resumeId, ats, fieldCount).catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 4000));
+        await page.close().catch(() => {});
+      }
+      this.events.emit("tab", { jobId, outcome, applicationId });
+      browserSession.release();
+    };
+    page.on("close", () => void finish("closed"));
+    timer = setInterval(async () => {
+      if (done || page.isClosed()) return;
+      try {
+        const url = page.url();
+        if (url !== baseline && SUCCESS_URL.test(url)) return void finish("submitted");
+        for (const frame of page.frames()) {
+          const text = await frame.evaluate(() => document.body?.innerText || "").catch(() => "");
+          if (SUCCESS_TEXT.test(text)) return void finish("submitted");
+        }
+      } catch {
+        // the page is navigating; check again on the next tick
+      }
+    }, 2500);
+  }
+
   /**
    * Runs one application. Runs are serialized because they share one persistent browser profile.
    */
@@ -238,7 +295,7 @@ export class AutoApplierEngine {
     const config = await getAutoApplyConfig();
     const waitForLogin = options.waitForLogin ?? config.onLogin === "wait";
     // Signing in needs a window the user can see.
-    const headless = waitForLogin ? false : (options.headless ?? config.headless);
+    const headless = options.mode === "tabs" || waitForLogin ? false : (options.headless ?? config.headless);
     const { profile, resumePdfPath, resumeContext } = await this.resolveApplicantProfile(
       job.id,
       options.resumeId,
@@ -257,7 +314,10 @@ export class AutoApplierEngine {
       log,
     };
 
-    let context: BrowserContext | null = null;
+    let liveCtx: BrowserContext | null = null;
+    const opened = new Set<Page>();
+    let handedOver: Page | null = null;
+    const onPage = (p: Page) => opened.add(p);
     let atsType: ATSSystemType = "generic";
     let screenshotPath: string | undefined;
     let screenshotBase64: string | undefined;
@@ -307,20 +367,20 @@ export class AutoApplierEngine {
 
     try {
       log(`Launching ${headless ? "headless" : "visible"} browser...`);
-      context = await chromium.launchPersistentContext(browserProfileDir(), {
-        headless,
-        viewport: { width: 1280, height: 960 },
-        args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
-      });
-      const live = context;
-      const watchdog = setTimeout(() => live.close().catch(() => {}), waitForLogin ? SIGN_IN_TIMEOUT_MS + JOB_TIMEOUT_MS : JOB_TIMEOUT_MS);
+      const live = await browserSession.get(headless);
+      liveCtx = live;
+      live.on("page", onPage);
+      const watchdog = setTimeout(
+        () => {
+          for (const p of opened) if (p !== handedOver) p.close().catch(() => {});
+        },
+        waitForLogin ? SIGN_IN_TIMEOUT_MS + JOB_TIMEOUT_MS : JOB_TIMEOUT_MS
+      );
 
       try {
-        // tsx/esbuild wraps named functions with __name(); the browser needs a stub for page.evaluate bodies.
-        await live.addInitScript("globalThis.__name = (fn) => fn;");
         const flow = async (): Promise<AutoApplyResult> => {
-          let page = live.pages()[0] ?? (await live.newPage());
-          page.setDefaultTimeout(20000);
+          let page = await browserSession.newPage(live);
+          opened.add(page);
 
           await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 35000 }).catch(async (err) => {
             if (/closed/i.test(String(err))) throw err;
@@ -409,6 +469,23 @@ export class AutoApplierEngine {
           await page.waitForTimeout(800);
           await snap(page, "app");
           log(`Filled ${fieldsFilled.length} fields; ${unfilled.size} required field(s) unresolved.`);
+
+          if (options.mode === "tabs") {
+            handedOver = page;
+            this.watchTab(page, job.id, options.resumeId, atsType, fieldsFilled.length);
+            log("Filled and left open in the browser. Review it and click Submit yourself.");
+            return {
+              ...base,
+              url: page.url(),
+              atsType,
+              status: "awaiting_user",
+              fieldsFilled,
+              unfilledFields: [...unfilled],
+              screenshotBase64,
+              screenshotPath,
+              logs,
+            };
+          }
 
           if (options.mode === "review") {
             return {
@@ -510,7 +587,11 @@ export class AutoApplierEngine {
       log(`Error during auto-application: ${errMsg}`);
       return stop("failed", errMsg);
     } finally {
-      if (context) await context.close().catch(() => {});
+      liveCtx?.off("page", onPage);
+      for (const p of opened) {
+        if (p !== handedOver && !p.isClosed()) await p.close().catch(() => {});
+      }
+      if (liveCtx) browserSession.release();
     }
   }
 

@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 export const AutoApplyConfigSchema = z.object({
-  mode: z.enum(["review", "auto_submit"]).default("auto_submit"),
+  /** tabs: fill each job in a browser tab and leave it open for the user to submit. */
+  mode: z.enum(["tabs", "review", "auto_submit"]).default("tabs"),
+  /** How many job tabs may be open at once in tabs mode. */
+  tabBatch: z.number().int().min(1).max(30).default(8),
   headless: z.boolean().default(true),
   dailyCap: z.number().int().min(1).max(500).default(40),
   delayMs: z.number().int().min(0).max(120000).default(4000),
