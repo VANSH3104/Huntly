@@ -11,6 +11,7 @@ import {
   BarChart3,
   Settings,
   Sparkles,
+  Terminal,
 } from "lucide-react";
 
 interface NavItem {
@@ -31,6 +32,7 @@ export const Sidebar: React.FC = () => {
     { id: "applications", label: "Applications", icon: CheckSquare },
     { id: "resume", label: "Resume Studio", icon: FileText },
     { id: "analytics", label: "Market Insights", icon: BarChart3 },
+    { id: "sandbox", label: "Agent Sandbox", icon: Terminal, badge: "DEV" },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 

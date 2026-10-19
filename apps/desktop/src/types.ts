@@ -18,6 +18,7 @@ export type NavTab =
   | "discovery"
   | "resume"
   | "analytics"
+  | "sandbox"
   | "settings";
 
 export interface JobWithMatch extends Job {
@@ -30,14 +31,30 @@ export interface JobWithMatch extends Job {
 export interface JobFilterState {
   search: string;
   role: string;
+  specialization?: string;
+  specializations?: string[];
   location: string;
+  region?: string;
+  regions?: string[];
   remoteOnly: boolean;
+  workFormat?: string;
+  workFormats?: string[];
+  seniority?: string;
+  seniorities?: string[];
+  sources?: string;
+  sourceList?: string[];
+  skills?: string;
+  skillList?: string[];
+  industry?: string;
+  industries?: string[];
+  collection?: string;
+  collections?: string[];
   minScore: number;
   ats: string;
   status: "all" | "active" | "stale" | "closed";
-  sortBy: "matchScore" | "postedAt" | "company" | "salary";
+  sortBy: "matchScore" | "postedAt" | "company" | "salary" | "newest" | "views";
   sortOrder: "asc" | "desc";
-  postedWithin?: "all" | "4h" | "9h" | "24h" | "3d" | "7d" | "30d";
+  postedWithin?: string;
   hideApplied?: boolean;
 }
 

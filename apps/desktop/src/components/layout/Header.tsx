@@ -38,6 +38,8 @@ export const Header: React.FC = () => {
         return "Resume Studio & LaTeX Tailoring";
       case "analytics":
         return "Market & Compensation Analytics";
+      case "sandbox":
+        return "Agent Sandbox Workspace";
       case "settings":
         return "System Settings & Keys";
       default:

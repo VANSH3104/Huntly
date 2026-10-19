@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useStore } from "../store/useStore";
 import { ScoreRing } from "../components/common/ScoreRing";
 import { Badge } from "../components/common/Badge";
+import { AutoApplyModal } from "../components/AutoApplyModal";
 import {
   Search,
   SlidersHorizontal,
@@ -36,10 +37,15 @@ import {
   Clock,
   Bookmark,
   BookmarkCheck,
+  Filter,
 } from "lucide-react";
 
 export const JobsView: React.FC = () => {
-  const { filters, setFilters, setSelectedJobId } = useStore();
+  const { filters, setFilters, resetFilters, setSelectedJobId } = useStore();
+  const [autoApplyJob, setAutoApplyJob] = React.useState<any | null>(null);
+  const [isBatchAutoApplying, setIsBatchAutoApplying] = React.useState(false);
+  const [batchApplyStatus, setBatchApplyStatus] = React.useState<string | null>(null);
+  const [batchApplyProgress, setBatchApplyProgress] = React.useState<{ current: number; total: number; currentJob?: string } | null>(null);
   const [isDiscovering, setIsDiscovering] = React.useState(false);
   const [discoverStatus, setDiscoverStatus] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -120,7 +126,32 @@ export const JobsView: React.FC = () => {
   // Reset page to 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [filters.search, filters.role, filters.location, filters.remoteOnly, filters.minScore, filters.ats, filters.status, filters.sortBy, filters.postedWithin, filters.hideApplied]);
+  }, [
+    filters.search,
+    filters.role,
+    filters.specialization,
+    filters.specializations,
+    filters.location,
+    filters.region,
+    filters.regions,
+    filters.remoteOnly,
+    filters.workFormat,
+    filters.workFormats,
+    filters.seniority,
+    filters.seniorities,
+    filters.sources,
+    filters.sourceList,
+    filters.skills,
+    filters.skillList,
+    filters.industry,
+    filters.collection,
+    filters.minScore,
+    filters.ats,
+    filters.status,
+    filters.sortBy,
+    filters.postedWithin,
+    filters.hideApplied,
+  ]);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["jobs", filters, currentPage, pageSize],
@@ -128,6 +159,14 @@ export const JobsView: React.FC = () => {
       api.jobs.list({
         search: filters.search,
         role: filters.role,
+        specialization: filters.specialization || (filters.specializations || []).join(", "),
+        seniority: filters.seniority || (filters.seniorities || []).join(", "),
+        workFormat: filters.workFormat || (filters.workFormats || []).join(", "),
+        region: filters.region || (filters.regions || []).join(", "),
+        sources: filters.sources || (filters.sourceList || []).join(", "),
+        skills: filters.skills || (filters.skillList || []).join(", "),
+        industry: filters.industry || (filters.industries || []).join(", "),
+        collection: filters.collection || (filters.collections || []).join(", "),
         location: filters.location,
         remoteOnly: filters.remoteOnly,
         minScore: filters.minScore > 0 ? filters.minScore : undefined,
@@ -301,8 +340,57 @@ export const JobsView: React.FC = () => {
     }
   };
 
+  const handleTriggerAutoApply = (job: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setAutoApplyJob(job);
+  };
+
+  const handleBatchAutoApply = async () => {
+    const eligibleJobs = jobsList.filter((j: any) => {
+      const rawScore = j.match?.overall ?? j.matchScore ?? 80;
+      const score = rawScore > 1 ? rawScore : rawScore * 100;
+      return score >= 65;
+    }).slice(0, 5);
+
+    if (eligibleJobs.length === 0) {
+      alert("No matching jobs found with score ≥ 65%. Try running Live Discover or adjusting filters.");
+      return;
+    }
+
+    if (!confirm(`Launch Autonomous Job Agent for ${eligibleJobs.length} top-matched positions? The Playwright browser sandbox will navigate to each job page, fill your details from your active resume, upload your compiled LaTeX PDF, and submit.`)) {
+      return;
+    }
+
+    setIsBatchAutoApplying(true);
+    setBatchApplyStatus(`Starting Autonomous Agent session for ${eligibleJobs.length} jobs...`);
+
+    let appliedCount = 0;
+    for (let i = 0; i < eligibleJobs.length; i++) {
+      const job = eligibleJobs[i];
+      setBatchApplyProgress({ current: i + 1, total: eligibleJobs.length, currentJob: `${job.title} at ${job.company?.name || job.companyName || "Company"}` });
+      setBatchApplyStatus(`[${i + 1}/${eligibleJobs.length}] Auto-filling & submitting for ${job.title}...`);
+
+      try {
+        await api.autoApply.apply({
+          jobId: job.id,
+          mode: "auto_submit",
+        });
+        appliedCount++;
+      } catch (err: any) {
+        console.warn(`Auto-apply failed for ${job.title}:`, err);
+      }
+    }
+
+    setIsBatchAutoApplying(false);
+    setBatchApplyProgress(null);
+    setBatchApplyStatus(`Autonomous Agent finished! Successfully applied to ${appliedCount} positions. Check Applications Kanban.`);
+    await refetch();
+    setTimeout(() => setBatchApplyStatus(null), 10000);
+  };
+
   return (
     <div className="page-container" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
       {/* Prominent Search & Filter Bar */}
       <div
         className="glass-panel"
@@ -580,6 +668,32 @@ export const JobsView: React.FC = () => {
           >
             <RefreshCw size={13} className={isDiscovering ? "animate-spin" : ""} />
             <span>{isDiscovering ? "Searching..." : "Find & Add Jobs"}</span>
+          </button>
+
+          {/* Autonomous Batch Auto-Apply Mode */}
+          <button
+            className="btn"
+            onClick={handleBatchAutoApply}
+            disabled={isBatchAutoApplying}
+            style={{
+              fontSize: "12px",
+              padding: "7px 16px",
+              whiteSpace: "nowrap",
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "6px",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: "0 2px 10px rgba(16, 185, 129, 0.35)",
+              cursor: isBatchAutoApplying ? "not-allowed" : "pointer",
+            }}
+            title="Autonomous Job Agent: navigates to ATS portals, fills your details from resume, and submits applications"
+          >
+            <Zap size={14} className={isBatchAutoApplying ? "animate-spin" : ""} />
+            <span>{isBatchAutoApplying ? "Auto-Applying..." : "⚡ Auto-Mode Apply"}</span>
           </button>
 
           {/* Clear Filters Reset */}
@@ -1746,9 +1860,35 @@ export const JobsView: React.FC = () => {
                     className="btn btn-primary"
                     onClick={(e) => handleApplyQuick(job, e)}
                     style={{ height: "30px", padding: "0 12px", fontSize: "11.5px" }}
+                    title="Open direct job application link"
                   >
                     <span>Apply</span>
                     <ExternalLink size={12} />
+                  </button>
+
+                  <button
+                    className="btn"
+                    onClick={(e) => handleTriggerAutoApply(job, e)}
+                    style={{
+                      height: "30px",
+                      padding: "0 12px",
+                      fontSize: "11.5px",
+                      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      boxShadow: "0 2px 8px rgba(16, 185, 129, 0.35)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Autonomous Agent: Navigates to job portal via Playwright, fills details from active resume, and submits"
+                  >
+                    <Bot size={13} />
+                    <span>Auto-Apply</span>
                   </button>
                 </div>
               </div>
@@ -1894,6 +2034,18 @@ export const JobsView: React.FC = () => {
             </select>
           </div>
         </div>
+      )}
+
+      {/* Auto-Apply Modal */}
+      {autoApplyJob && (
+        <AutoApplyModal
+          job={autoApplyJob}
+          isOpen={!!autoApplyJob}
+          onClose={() => setAutoApplyJob(null)}
+          onAppliedSuccess={async () => {
+            await refetch();
+          }}
+        />
       )}
     </div>
   );

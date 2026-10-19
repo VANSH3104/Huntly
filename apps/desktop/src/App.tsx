@@ -13,6 +13,7 @@ import { DiscoveryView } from "./views/DiscoveryView";
 import { ApplicationsView } from "./views/ApplicationsView";
 import { ResumeStudioView } from "./views/ResumeStudioView";
 import { AnalyticsView } from "./views/AnalyticsView";
+import { SandboxView } from "./views/SandboxView";
 import { SettingsView } from "./views/SettingsView";
 
 export const App: React.FC = () => {
@@ -34,6 +35,8 @@ export const App: React.FC = () => {
         return <ResumeStudioView />;
       case "analytics":
         return <AnalyticsView />;
+      case "sandbox":
+        return <SandboxView />;
       case "settings":
         return <SettingsView />;
       default:

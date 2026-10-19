@@ -17,10 +17,11 @@ import {
   Building,
   MapPin,
   Briefcase,
-  Layers,
   FileText,
   Download,
+  Zap,
 } from "lucide-react";
+import { AutoApplyModal } from "../components/AutoApplyModal";
 
 export const JobDetailModal: React.FC = () => {
   const { selectedJobId, isJobModalOpen, setIsJobModalOpen } = useStore();
@@ -39,6 +40,7 @@ export const JobDetailModal: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [coverLetter, setCoverLetter] = useState<string | null>(null);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [showAutoApply, setShowAutoApply] = useState(false);
 
   const downloadPdfFromBase64 = (base64: string, filename: string) => {
     const byteCharacters = atob(base64);
@@ -208,6 +210,29 @@ export const JobDetailModal: React.FC = () => {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              onClick={() => setShowAutoApply(true)}
+              className="btn"
+              style={{
+                fontSize: "12px",
+                padding: "6px 14px",
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "6px",
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                boxShadow: "0 2px 8px rgba(16, 185, 129, 0.35)",
+                cursor: "pointer",
+              }}
+              title="Autonomous Agent: Opens browser, fills details from active resume, attaches PDF, and applies"
+            >
+              <Zap size={13} />
+              <span>⚡ Auto-Apply (Browser Agent)</span>
+            </button>
+
             {job?.applyUrl && (
               <a
                 href={job.applyUrl}
@@ -827,6 +852,14 @@ export const JobDetailModal: React.FC = () => {
           )}
         </div>
       </div>
+
+      {showAutoApply && job && (
+        <AutoApplyModal
+          job={job}
+          isOpen={showAutoApply}
+          onClose={() => setShowAutoApply(false)}
+        />
+      )}
     </div>
   );
 };

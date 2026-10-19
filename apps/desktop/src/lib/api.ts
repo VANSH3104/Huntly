@@ -327,10 +327,124 @@ export const api = {
         architectureOverview: string;
         markdownContent: string;
         codeExample?: string;
-        takeaways: string[];
-      }>("/intel/deep-dive", {
+      }>("/intel/deep-dive", { method: "POST", body: JSON.stringify(params) }),
+  },
+
+  // Agent Sandbox Environment
+  sandbox: {
+    list: () => request<any[]>("/sandbox"),
+    create: (data: { id?: string; timeoutSeconds?: number; persistent?: boolean; metadata?: Record<string, string> } = {}) =>
+      request<any>("/sandbox", { method: "POST", body: JSON.stringify(data) }),
+    get: (id: string) => request<any>(`/sandbox/${id}`),
+    terminate: (id: string) => request<any>(`/sandbox/${id}`, { method: "DELETE" }),
+    execCommand: (id: string, command: string, cwd?: string, timeoutSeconds?: number) =>
+      request<{
+        commandId: string;
+        command: string;
+        stdout: string;
+        stderr: string;
+        exitCode: number | null;
+        durationMs: number;
+        timedOut: boolean;
+        status: "completed" | "failed" | "timed_out" | "running";
+      }>(`/sandbox/${id}/commands`, {
         method: "POST",
-        body: JSON.stringify(params),
+        body: JSON.stringify({ command, cwd, timeoutSeconds }),
+      }),
+    listFiles: (id: string, path: string = ".") =>
+      request<{ files: Array<{ name: string; path: string; isDirectory: boolean; sizeBytes: number; updatedAt: string }> }>(
+        `/sandbox/${id}/files/list?path=${encodeURIComponent(path)}`
+      ),
+    readFile: (id: string, path: string) =>
+      request<{ content: string; sizeBytes: number }>(`/sandbox/${id}/files?path=${encodeURIComponent(path)}`),
+    writeFile: (id: string, path: string, content: string) =>
+      request<{ success: boolean; path: string; bytesWritten: number }>(`/sandbox/${id}/files`, {
+        method: "POST",
+        body: JSON.stringify({ path, content }),
+      }),
+    browser: {
+      getStatus: () => request<any>("/sandbox/browser/status"),
+      navigate: (url: string, viewport?: { width: number; height: number }) =>
+        request<any>("/sandbox/browser/navigate", {
+          method: "POST",
+          body: JSON.stringify({ url, viewport }),
+        }),
+      click: (coords?: { x?: number; y?: number; selector?: string }) =>
+        request<any>("/sandbox/browser/click", {
+          method: "POST",
+          body: JSON.stringify(coords || {}),
+        }),
+      type: (text: string, selector?: string) =>
+        request<any>("/sandbox/browser/type", {
+          method: "POST",
+          body: JSON.stringify({ text, selector }),
+        }),
+      scroll: (deltaY: number = 300) =>
+        request<any>("/sandbox/browser/scroll", {
+          method: "POST",
+          body: JSON.stringify({ deltaY }),
+        }),
+      back: () => request<any>("/sandbox/browser/back", { method: "POST" }),
+      forward: () => request<any>("/sandbox/browser/forward", { method: "POST" }),
+      reload: () => request<any>("/sandbox/browser/reload", { method: "POST" }),
+      close: () => request<any>("/sandbox/browser/close", { method: "POST" }),
+    },
+  },
+
+  // Autonomous Job Application Crawler (Auto-Applier)
+  autoApply: {
+    getProfile: () => request<any>("/auto-apply/profile"),
+    updateProfile: (profile: any) =>
+      request<{ success: boolean; profile: any }>("/auto-apply/profile", {
+        method: "PUT",
+        body: JSON.stringify(profile),
+      }),
+    apply: (data: {
+      jobId: string;
+      resumeId?: string;
+      mode: "review" | "auto_submit";
+      profileOverrides?: any;
+    }) =>
+      request<{
+        jobId: string;
+        title: string;
+        company: string;
+        url: string;
+        atsType: string;
+        status: "ready_for_review" | "submitted" | "failed";
+        fieldsFilled: Array<{ field: string; label: string; value: string; type: string }>;
+        screenshotBase64?: string;
+        screenshotPath?: string;
+        confirmationMessage?: string;
+        logs: string[];
+        error?: string;
+        applicationId?: string;
+      }>("/auto-apply", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    confirm: (data: { jobId: string; resumeId?: string }) =>
+      request<any>("/auto-apply/confirm", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    getMemory: () => request<{ success: boolean; memory: Record<string, string> }>("/auto-apply/memory"),
+    saveMemory: (data: { question: string; answer: string }) =>
+      request<{ success: boolean; question: string; answer: string }>("/auto-apply/memory", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    batch: (data: { jobIds: string[]; resumeId?: string; mode?: "review" | "auto_submit" }) =>
+      request<{
+        success: boolean;
+        total: number;
+        submitted: number;
+        readyForReview: number;
+        failed: number;
+        results: any[];
+      }>("/auto-apply/batch", {
+        method: "POST",
+        body: JSON.stringify(data),
       }),
   },
 };

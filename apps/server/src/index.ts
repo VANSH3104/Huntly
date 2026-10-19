@@ -20,6 +20,8 @@ import { settingsRouter } from "./routes/settings.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { aiRouter } from "./routes/ai.js";
 import { intelRouter } from "./routes/intel.js";
+import { sandboxRouter } from "./routes/sandbox.js";
+import { autoApplyRouter } from "./routes/auto-apply.js";
 
 // Workers
 import { WorkerOrchestrator } from "./workers/orchestrator.js";
@@ -57,6 +59,8 @@ async function bootstrap(): Promise<void> {
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/intel", intelRouter);
+  app.use("/api/sandbox", sandboxRouter);
+  app.use("/api/auto-apply", autoApplyRouter);
 
   // Global error handler
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
