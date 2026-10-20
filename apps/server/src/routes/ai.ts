@@ -126,7 +126,7 @@ aiRouter.post("/tailor-resume", async (req, res, next) => {
     if (!resume) return res.status(404).json({ error: "Resume not found" });
 
     // Get candidate first name from parsed resume
-    let candidateName = "vansh";
+    let candidateName = "candidate";
     if (resume.parsedJson) {
       try {
         const parsed = JSON.parse(resume.parsedJson);
@@ -139,7 +139,7 @@ aiRouter.post("/tailor-resume", async (req, res, next) => {
       } catch {}
     }
 
-    // Format requested filename: e.g. vansh_company_resume.pdf
+    // Format requested filename: e.g. candidate_company_resume.pdf
     const sanitizedCompany = companyName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
@@ -189,7 +189,7 @@ aiRouter.post("/download-pdf", async (req, res, next) => {
   try {
     const schema = z.object({
       latex: z.string().min(10),
-      filename: z.string().default("vansh_resume.pdf"),
+      filename: z.string().default("candidate_resume.pdf"),
     });
     const { latex, filename } = schema.parse(req.body);
     const compileResult = await latexCompiler.compile(latex, filename);
@@ -228,7 +228,7 @@ aiRouter.post("/compile-resume", async (req, res, next) => {
         }
       }
       const [activeResume] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
-      let candidateName = "vansh";
+      let candidateName = "candidate";
       if (activeResume?.parsedJson) {
         try {
           const parsed = JSON.parse(activeResume.parsedJson);

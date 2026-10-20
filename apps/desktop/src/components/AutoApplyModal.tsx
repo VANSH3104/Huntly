@@ -1,22 +1,30 @@
 import React, { useState, useEffect } from "react";
 import {
-  Zap,
-  CheckCircle2,
   AlertCircle,
-  Loader2,
-  FileText,
-  User,
-  Globe,
+  Brain,
   Camera,
-  Send,
-  Eye,
-  X,
+  CheckCircle2,
   ChevronDown,
-  ChevronUp,
-  Sparkles,
+  ExternalLink,
+  Eye,
+  FileText,
+  Loader2,
+  Send,
   ShieldCheck,
+  User,
+  Zap,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
+import { errorMessage, toast } from "@/lib/notify";
 
 interface AutoApplyModalProps {
   job: any;
@@ -25,12 +33,16 @@ interface AutoApplyModalProps {
   onAppliedSuccess?: (application: any) => void;
 }
 
-export const AutoApplyModal: React.FC<AutoApplyModalProps> = ({
-  job,
-  isOpen,
-  onClose,
-  onAppliedSuccess,
-}) => {
+const PROFILE_FIELDS: Array<{ key: string; label: string; type: string; autoComplete?: string }> = [
+  { key: "fullName", label: "Full name", type: "text", autoComplete: "name" },
+  { key: "email", label: "Email", type: "email", autoComplete: "email" },
+  { key: "phone", label: "Phone number", type: "tel", autoComplete: "tel" },
+  { key: "linkedinUrl", label: "LinkedIn URL", type: "url" },
+  { key: "githubUrl", label: "GitHub URL", type: "url" },
+  { key: "portfolioUrl", label: "Portfolio or website", type: "url", autoComplete: "url" },
+];
+
+export const AutoApplyModal: React.FC<AutoApplyModalProps> = ({ job, isOpen, onClose, onAppliedSuccess }) => {
   const [mode, setMode] = useState<"review" | "auto_submit">("review");
   const [step, setStep] = useState<"configure" | "running" | "reviewed" | "submitted" | "error">("configure");
   const [profile, setProfile] = useState<any>({
@@ -109,8 +121,9 @@ export const AutoApplyModal: React.FC<AutoApplyModalProps> = ({
       setMemory((prev) => ({ ...prev, [q.trim().toLowerCase()]: a.trim() }));
       setNewMemQ("");
       setNewMemA("");
-    } catch (err: any) {
-      alert(`Failed to save memory: ${err.message}`);
+      toast.success("Answer saved", { description: "It will be reused on future applications." });
+    } catch (err) {
+      toast.error("Could not save the answer", { description: errorMessage(err) });
     } finally {
       setIsSavingMem(false);
     }
@@ -180,750 +193,369 @@ export const AutoApplyModal: React.FC<AutoApplyModalProps> = ({
     }
   };
 
-  if (!isOpen || !job) return null;
+  if (!job) return null;
+
+  const companyName = job.company?.name || job.companyName || "the company";
+  const memoryCount = Object.keys(memory).length;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.7)",
-        backdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1100,
-        padding: "20px",
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "840px",
-          maxHeight: "90vh",
-          backgroundColor: "var(--bg-card)",
-          borderRadius: "var(--radius-lg)",
-          border: "1px solid var(--border-subtle)",
-          boxShadow: "var(--shadow-xl)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: "18px 24px",
-            borderBottom: "1px solid var(--border-subtle)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: "var(--bg-secondary)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "rgba(99, 102, 241, 0.12)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Zap size={20} color="var(--accent-indigo)" />
+    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex max-h-[min(860px,calc(100vh-3rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[760px]">
+        <DialogHeader className="gap-3 border-b border-border px-6 pt-5 pb-4 pr-14 text-left">
+          <div className="flex items-start gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-primary" aria-hidden>
+              <Zap className="size-4" />
             </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>
-                  Autonomous Job Application Crawler
-                </h2>
-                <span
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 700,
-                    padding: "2px 6px",
-                    borderRadius: "4px",
-                    backgroundColor: "rgba(16, 185, 129, 0.15)",
-                    color: "var(--accent-emerald)",
-                  }}
-                >
-                  AI POWERED
-                </span>
-              </div>
-              <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Applying to <strong style={{ color: "var(--text-primary)" }}>{job.title}</strong> at {job.company?.name || "Target Company"}
-              </p>
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle className="font-sans text-lg font-semibold tracking-tight">Auto-apply</DialogTitle>
+              <DialogDescription>
+                Applying to <span className="font-medium text-foreground">{job.title}</span> at {companyName}
+              </DialogDescription>
             </div>
           </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <button
+          <div>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-pressed={showMemory}
               onClick={() => setShowMemory(!showMemory)}
-              className="btn btn-secondary"
-              style={{
-                fontSize: "11px",
-                padding: "5px 11px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                borderColor: showMemory ? "var(--accent-indigo)" : undefined,
-                backgroundColor: showMemory ? "rgba(99, 102, 241, 0.1)" : undefined,
-                color: showMemory ? "var(--accent-indigo)" : "var(--text-secondary)",
-                borderRadius: "6px",
-              }}
-              title="Persistent Q&A Memory: Agent remembers your answers so you don't need to re-enter them"
+              className={cn(showMemory && "border-[var(--brand-line)] bg-[var(--brand-soft)]")}
             >
-              <span>🧠 Learned Answers ({Object.keys(memory).length})</span>
-            </button>
-
-            <button
-              onClick={onClose}
-              className="btn-icon btn-ghost"
-              style={{ width: "32px", height: "32px" }}
-            >
-              <X size={16} />
-            </button>
+              <Brain data-icon="inline-start" aria-hidden />
+              Learned answers
+              <span className="text-xs text-muted-foreground tabular-nums">{memoryCount}</span>
+            </Button>
           </div>
-        </div>
+        </DialogHeader>
 
-        {/* Modal Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
-          {/* LEARNED MEMORY DRAWER */}
-          {showMemory && (
-            <div
-              style={{
-                marginBottom: "20px",
-                padding: "16px",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "rgba(99, 102, 241, 0.05)",
-                border: "1px solid rgba(99, 102, 241, 0.2)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Sparkles size={15} color="var(--accent-indigo)" />
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>
-                    Persistent Learned Answers Memory
-                  </span>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="flex flex-col gap-5">
+            {showMemory && (
+              <section aria-label="Learned answers" className="flex flex-col gap-3 rounded-xl border border-border bg-muted/50 p-4">
+                <div className="flex flex-col gap-0.5">
+                  <h3 className="text-sm font-semibold text-foreground">Learned answers</h3>
+                  <p className="text-xs text-muted-foreground">Reused across Greenhouse, Lever, Ashby, Workday and other portals.</p>
                 </div>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  Auto-populated across all ATS portals (Greenhouse, Lever, Ashby, Workday, etc.)
-                </span>
-              </div>
-
-              {/* Add new memory input */}
-              <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
-                <input
-                  type="text"
-                  placeholder="Question / Prompt (e.g. Notice period or Work authorization)"
-                  value={newMemQ}
-                  onChange={(e) => setNewMemQ(e.target.value)}
-                  style={{
-                    flex: 1,
-                    minWidth: "220px",
-                    padding: "6px 10px",
-                    fontSize: "12px",
-                    borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border-subtle)",
-                    backgroundColor: "var(--bg-card)",
-                    color: "var(--text-primary)",
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Answer (e.g. Immediate / 15 days or Yes, Authorized)"
-                  value={newMemA}
-                  onChange={(e) => setNewMemA(e.target.value)}
-                  style={{
-                    flex: 1,
-                    minWidth: "220px",
-                    padding: "6px 10px",
-                    fontSize: "12px",
-                    borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border-subtle)",
-                    backgroundColor: "var(--bg-card)",
-                    color: "var(--text-primary)",
-                  }}
-                />
-                <button
-                  className="btn btn-primary"
-                  onClick={() => handleSaveMemoryItem(newMemQ, newMemA)}
-                  disabled={isSavingMem || !newMemQ.trim() || !newMemA.trim()}
-                  style={{ fontSize: "12px", padding: "6px 14px", whiteSpace: "nowrap" }}
-                >
-                  {isSavingMem ? "Saving..." : "Remember Answer"}
-                </button>
-              </div>
-
-              {/* List of remembered items */}
-              {Object.keys(memory).length === 0 ? (
-                <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic" }}>
-                  No custom answers stored yet. As applications are filled, the agent will learn and remember recurring questions automatically!
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "160px", overflowY: "auto" }}>
-                  {Object.entries(memory).map(([q, a]) => (
-                    <div
-                      key={q}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: "var(--radius-sm)",
-                        backgroundColor: "var(--bg-card)",
-                        border: "1px solid var(--border-subtle)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        fontSize: "12px",
-                      }}
-                    >
-                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                        <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{q}</span>
-                        <span style={{ color: "var(--text-secondary)" }}>{a}</span>
-                      </div>
-                      <span
-                        style={{
-                          fontSize: "10px",
-                          fontFamily: "var(--font-mono)",
-                          padding: "1px 6px",
-                          borderRadius: "4px",
-                          backgroundColor: "rgba(16, 185, 129, 0.12)",
-                          color: "var(--accent-emerald)",
-                          fontWeight: 600,
-                        }}
-                      >
-                        CACHED
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* STEP 1: CONFIGURE & REVIEW DETAILS */}
-          {step === "configure" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              {/* Mode Selection */}
-              <div>
-                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", display: "block", marginBottom: "8px" }}>
-                  Select Automation Execution Mode
-                </label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div
-                    onClick={() => setMode("review")}
-                    style={{
-                      padding: "14px",
-                      borderRadius: "var(--radius-md)",
-                      border: `2px solid ${mode === "review" ? "var(--accent-indigo)" : "var(--border-subtle)"}`,
-                      backgroundColor: mode === "review" ? "rgba(99, 102, 241, 0.05)" : "var(--bg-secondary)",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                      <Eye size={16} color="var(--accent-indigo)" />
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                        Interactive Review Mode
-                      </span>
-                    </div>
-                    <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", lineHeight: 1.4 }}>
-                      Crawler navigates, fills all fields, uploads resume, uses AI for questions, captures screenshot, and pauses for your approval before submitting.
-                    </p>
-                  </div>
-
-                  <div
-                    onClick={() => setMode("auto_submit")}
-                    style={{
-                      padding: "14px",
-                      borderRadius: "var(--radius-md)",
-                      border: `2px solid ${mode === "auto_submit" ? "var(--accent-emerald)" : "var(--border-subtle)"}`,
-                      backgroundColor: mode === "auto_submit" ? "rgba(16, 185, 129, 0.05)" : "var(--bg-secondary)",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                      <Zap size={16} color="var(--accent-emerald)" />
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                        1-Click Full Automation
-                      </span>
-                    </div>
-                    <p style={{ fontSize: "11.5px", color: "var(--text-secondary)", lineHeight: 1.4 }}>
-                      Crawler autonomously fills the complete application, uploads resume, answers screening prompts, clicks Submit, and records confirmation in your database.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Applicant Profile Information */}
-              <div
-                style={{
-                  padding: "16px",
-                  borderRadius: "var(--radius-md)",
-                  backgroundColor: "var(--bg-secondary)",
-                  border: "1px solid var(--border-subtle)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
-                  <User size={15} color="var(--accent-indigo)" />
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                    Applicant Details to Autofill
-                  </span>
-                  <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-muted)" }}>
-                    {activeResume ? `Active Resume: ${activeResume.name}` : "No active resume loaded"}
-                  </span>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div>
-                    <label style={{ fontSize: "11px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      value={profile.fullName}
-                      onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "6px 10px",
-                        fontSize: "12px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--border-subtle)",
-                        backgroundColor: "var(--bg-card)",
-                        color: "var(--text-primary)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "11px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "6px 10px",
-                        fontSize: "12px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--border-subtle)",
-                        backgroundColor: "var(--bg-card)",
-                        color: "var(--text-primary)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "11px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      value={profile.phone}
-                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "6px 10px",
-                        fontSize: "12px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--border-subtle)",
-                        backgroundColor: "var(--bg-card)",
-                        color: "var(--text-primary)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "11px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                      LinkedIn URL
-                    </label>
-                    <input
-                      type="url"
-                      value={profile.linkedinUrl}
-                      onChange={(e) => setProfile({ ...profile, linkedinUrl: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "6px 10px",
-                        fontSize: "12px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--border-subtle)",
-                        backgroundColor: "var(--bg-card)",
-                        color: "var(--text-primary)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "11px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                      GitHub URL
-                    </label>
-                    <input
-                      type="url"
-                      value={profile.githubUrl}
-                      onChange={(e) => setProfile({ ...profile, githubUrl: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "6px 10px",
-                        fontSize: "12px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--border-subtle)",
-                        backgroundColor: "var(--bg-card)",
-                        color: "var(--text-primary)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "11px", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                      Portfolio / Website
-                    </label>
-                    <input
-                      type="url"
-                      value={profile.portfolioUrl}
-                      onChange={(e) => setProfile({ ...profile, portfolioUrl: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "6px 10px",
-                        fontSize: "12px",
-                        borderRadius: "var(--radius-sm)",
-                        border: "1px solid var(--border-subtle)",
-                        backgroundColor: "var(--bg-card)",
-                        color: "var(--text-primary)",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Work Authorization Checkboxes */}
-                <div style={{ marginTop: "14px", display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", cursor: "pointer", color: "var(--text-primary)" }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.authorizedToWork}
-                      onChange={(e) => setProfile({ ...profile, authorizedToWork: e.target.checked })}
-                    />
-                    <span>Legally authorized to work</span>
-                  </label>
-
-                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", cursor: "pointer", color: "var(--text-primary)" }}>
-                    <input
-                      type="checkbox"
-                      checked={profile.requireSponsorship}
-                      onChange={(e) => setProfile({ ...profile, requireSponsorship: e.target.checked })}
-                    />
-                    <span>Requires visa sponsorship now or future</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: RUNNING LIVE PROGRESS */}
-          {step === "running" && (
-            <div style={{ padding: "40px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              <Loader2 size={44} className="animate-spin" color="var(--accent-indigo)" style={{ marginBottom: "16px" }} />
-              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
-                Crawler Automating Application...
-              </h3>
-              <p style={{ fontSize: "13px", color: "var(--text-secondary)", textAlign: "center", maxWidth: "480px" }}>
-                Navigating to application portal, detecting ATS, filling candidate credentials, uploading resume PDF, and formulating AI responses.
-              </p>
-
-              {/* Live Step Stepper */}
-              <div
-                style={{
-                  marginTop: "24px",
-                  width: "100%",
-                  maxWidth: "500px",
-                  padding: "16px",
-                  backgroundColor: "var(--bg-secondary)",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-subtle)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}
-              >
-                {[
-                  "1. Launching automated browser & loading portal",
-                  "2. Detecting ATS signature & form field hierarchy",
-                  "3. Autofilling contact details, links & locations",
-                  "4. Uploading compiled LaTeX resume PDF",
-                  "5. AI answering custom screening prompts",
-                  mode === "auto_submit" ? "6. Submitting application & capturing confirmation" : "6. Generating visual preview snapshot for review",
-                ].map((s, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--text-secondary)" }}>
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--accent-indigo)" }} />
-                    <span>{s}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: REVIEW BEFORE SUBMIT */}
-          {step === "reviewed" && result && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div
-                style={{
-                  padding: "12px 16px",
-                  backgroundColor: "rgba(99, 102, 241, 0.08)",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid rgba(99, 102, 241, 0.2)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <ShieldCheck size={18} color="var(--accent-indigo)" />
-                  <div>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                      Application Ready for Final Review ({result.atsType?.toUpperCase()})
-                    </span>
-                    <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
-                      Successfully autofilled {result.fieldsFilled?.length || 0} fields. Inspect the preview below before submitting.
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <button
-                    className={`btn ${previewTab === "screenshot" ? "btn-primary" : "btn-secondary"}`}
-                    onClick={() => setPreviewTab("screenshot")}
-                    style={{ height: "28px", padding: "0 10px", fontSize: "11px" }}
-                  >
-                    <Camera size={12} />
-                    <span>Page Screenshot</span>
-                  </button>
-                  <button
-                    className={`btn ${previewTab === "fields" ? "btn-primary" : "btn-secondary"}`}
-                    onClick={() => setPreviewTab("fields")}
-                    style={{ height: "28px", padding: "0 10px", fontSize: "11px" }}
-                  >
-                    <FileText size={12} />
-                    <span>Filled Fields ({result.fieldsFilled?.length || 0})</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Preview Content */}
-              {previewTab === "screenshot" ? (
-                <div
-                  style={{
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--border-subtle)",
-                    overflow: "hidden",
-                    backgroundColor: "#1e1e1e",
-                    maxHeight: "440px",
-                    overflowY: "auto",
+                <form
+                  className="flex flex-wrap gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSaveMemoryItem(newMemQ, newMemA);
                   }}
                 >
-                  {result.screenshotBase64 ? (
-                    <img
-                      src={result.screenshotBase64}
-                      alt="Filled Application Form Preview"
-                      style={{ width: "100%", display: "block" }}
-                    />
-                  ) : (
-                    <div style={{ padding: "40px", textAlign: "center", color: "#888" }}>Screenshot unavailable</div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--border-subtle)",
-                    backgroundColor: "var(--bg-secondary)",
-                    padding: "12px",
-                    maxHeight: "440px",
-                    overflowY: "auto",
-                  }}
-                >
-                  <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-secondary)", textAlign: "left" }}>
-                        <th style={{ padding: "6px 8px" }}>Field Label</th>
-                        <th style={{ padding: "6px 8px" }}>Category</th>
-                        <th style={{ padding: "6px 8px" }}>Autofilled Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.fieldsFilled?.map((f: any, idx: number) => (
-                        <tr key={idx} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-                          <td style={{ padding: "8px", fontWeight: 600, color: "var(--text-primary)" }}>{f.label || f.field}</td>
-                          <td style={{ padding: "8px", color: "var(--text-muted)" }}>
-                            <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--bg-card)" }}>
-                              {f.category}
-                            </span>
-                          </td>
-                          <td style={{ padding: "8px", color: "var(--text-primary)" }}>
-                            {f.type === "ai_generated" ? (
-                              <div>
-                                <span style={{ fontSize: "9px", padding: "1px 4px", borderRadius: "3px", backgroundColor: "rgba(168, 85, 247, 0.2)", color: "#c084fc", marginRight: "4px" }}>
-                                  AI ANSWER
-                                </span>
-                                {f.value}
-                              </div>
-                            ) : (
-                              f.value
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* STEP 4: SUBMITTED SUCCESS */}
-          {step === "submitted" && result && (
-            <div style={{ padding: "30px 20px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-              <div
-                style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "50%",
-                  backgroundColor: "rgba(16, 185, 129, 0.15)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: "16px",
-                }}
-              >
-                <CheckCircle2 size={32} color="var(--accent-emerald)" />
-              </div>
-              <h3 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "6px" }}>
-                Application Successfully Submitted!
-              </h3>
-              <p style={{ fontSize: "13px", color: "var(--text-secondary)", maxWidth: "460px", marginBottom: "16px" }}>
-                {result.confirmationMessage || `Applied to ${job.title} at ${job.company?.name || "Company"}.`}
-              </p>
-              <div
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: "var(--radius-md)",
-                  backgroundColor: "var(--bg-secondary)",
-                  border: "1px solid var(--border-subtle)",
-                  fontSize: "12px",
-                  color: "var(--text-secondary)",
-                }}
-              >
-                Recorded in database & added to your <strong>Applications Kanban Board</strong>.
-              </div>
-            </div>
-          )}
-
-          {/* STEP 5: ERROR */}
-          {step === "error" && (
-            <div style={{ padding: "30px 20px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-              <AlertCircle size={40} color="var(--accent-rose)" style={{ marginBottom: "12px" }} />
-              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
-                Application Crawler Encountered an Issue
-              </h3>
-              <p style={{ fontSize: "12.5px", color: "var(--accent-rose)", maxWidth: "500px", marginBottom: "16px" }}>
-                {result?.error || result?.reason || logs[logs.length - 1] || "Failed to automate job application form."}
-              </p>
-              <button className="btn btn-secondary" onClick={() => setStep("configure")}>
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {/* Logs Accordion */}
-          {logs.length > 0 && (
-            <div style={{ marginTop: "16px", borderTop: "1px solid var(--border-subtle)", paddingTop: "12px" }}>
-              <button
-                onClick={() => setShowLogs(!showLogs)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--text-secondary)",
-                  fontSize: "12px",
-                }}
-              >
-                <span>Crawler Automation Logs ({logs.length} events)</span>
-                {showLogs ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-
-              {showLogs && (
-                <div
-                  style={{
-                    marginTop: "8px",
-                    padding: "10px",
-                    borderRadius: "var(--radius-sm)",
-                    backgroundColor: "#0d1117",
-                    color: "#c9d1d9",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "11px",
-                    maxHeight: "150px",
-                    overflowY: "auto",
-                  }}
-                >
-                  {logs.map((l, i) => (
-                    <div key={i} style={{ marginBottom: "3px" }}>
-                      {l}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Modal Footer */}
-        <div
-          style={{
-            padding: "14px 24px",
-            borderTop: "1px solid var(--border-subtle)",
-            backgroundColor: "var(--bg-secondary)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-            {job.applyUrl ? (
-              <a href={job.applyUrl} target="_blank" rel="noreferrer" style={{ color: "var(--accent-indigo)", textDecoration: "underline" }}>
-                Open original job posting ↗
-              </a>
-            ) : null}
-          </div>
-
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button className="btn btn-ghost" onClick={onClose} disabled={isRunning}>
-              {step === "submitted" ? "Done" : "Cancel"}
-            </button>
+                  <Input
+                    aria-label="Question"
+                    placeholder="Question, e.g. Notice period"
+                    value={newMemQ}
+                    onChange={(e) => setNewMemQ(e.target.value)}
+                    className="min-w-[200px] flex-1 bg-card"
+                  />
+                  <Input
+                    aria-label="Answer"
+                    placeholder="Answer, e.g. 15 days"
+                    value={newMemA}
+                    onChange={(e) => setNewMemA(e.target.value)}
+                    className="min-w-[200px] flex-1 bg-card"
+                  />
+                  <Button type="submit" disabled={isSavingMem || !newMemQ.trim() || !newMemA.trim()}>
+                    {isSavingMem && <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />}
+                    {isSavingMem ? "Saving…" : "Remember"}
+                  </Button>
+                </form>
+                {memoryCount === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No saved answers yet. The agent learns recurring questions as it fills applications.
+                  </p>
+                ) : (
+                  <ul className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+                    {Object.entries(memory).map(([q, a]) => (
+                      <li key={q} className="flex flex-col gap-0.5 rounded-lg border border-border bg-card px-3 py-2 text-xs">
+                        <span className="font-medium text-foreground">{q}</span>
+                        <span className="text-muted-foreground">{a}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
 
             {step === "configure" && (
-              <button className="btn btn-primary" onClick={handleStartApply} disabled={isRunning}>
-                <Zap size={14} />
-                <span>{mode === "review" ? "Start Autofill & Review" : "⚡ 1-Click Auto-Submit"}</span>
-              </button>
+              <>
+                <section className="flex flex-col gap-2.5">
+                  <h3 id="aa-mode" className="text-sm font-semibold text-foreground">
+                    Mode
+                  </h3>
+                  <ToggleGroup
+                    type="single"
+                    aria-labelledby="aa-mode"
+                    value={mode}
+                    onValueChange={(v) => v && setMode(v as "review" | "auto_submit")}
+                    className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2"
+                  >
+                    {(
+                      [
+                        {
+                          id: "review",
+                          icon: Eye,
+                          title: "Review before submitting",
+                          body: "Fills every field, uploads your resume, answers questions with AI, then pauses with a screenshot for your approval.",
+                        },
+                        {
+                          id: "auto_submit",
+                          icon: Zap,
+                          title: "Submit automatically",
+                          body: "Fills the full application, answers screening questions, submits it and records the confirmation.",
+                        },
+                      ] as const
+                    ).map((m) => (
+                      <ToggleGroupItem
+                        key={m.id}
+                        value={m.id}
+                        className={cn(
+                          "h-auto flex-col items-start gap-1.5 rounded-xl border border-border bg-card p-4 text-left whitespace-normal shadow-none",
+                          "hover:border-[var(--border-hover)] hover:bg-card hover:text-foreground",
+                          "data-[state=on]:border-primary data-[state=on]:bg-[var(--brand-soft)] data-[state=on]:text-foreground"
+                        )}
+                      >
+                        <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                          <m.icon className="size-4 text-primary" aria-hidden />
+                          {m.title}
+                        </span>
+                        <span className="text-xs leading-relaxed font-normal text-muted-foreground">{m.body}</span>
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </section>
+
+                <section className="flex flex-col gap-4 rounded-xl border border-border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <User className="size-4 text-muted-foreground" aria-hidden />
+                      Details to autofill
+                    </h3>
+                    <span className="text-xs text-muted-foreground">
+                      {activeResume ? `Resume: ${activeResume.name}` : "No active resume"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {PROFILE_FIELDS.map((f) => (
+                      <div key={f.key} className="flex flex-col gap-2">
+                        <Label htmlFor={`aa-${f.key}`}>{f.label}</Label>
+                        <Input
+                          id={`aa-${f.key}`}
+                          type={f.type}
+                          autoComplete={f.autoComplete}
+                          value={profile[f.key]}
+                          onChange={(e) => setProfile({ ...profile, [f.key]: e.target.value })}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    <div className="flex items-center gap-2.5">
+                      <Checkbox
+                        id="aa-authorized"
+                        checked={profile.authorizedToWork}
+                        onCheckedChange={(v) => setProfile({ ...profile, authorizedToWork: v === true })}
+                      />
+                      <Label htmlFor="aa-authorized" className="font-normal">
+                        Legally authorised to work
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <Checkbox
+                        id="aa-sponsorship"
+                        checked={profile.requireSponsorship}
+                        onCheckedChange={(v) => setProfile({ ...profile, requireSponsorship: v === true })}
+                      />
+                      <Label htmlFor="aa-sponsorship" className="font-normal">
+                        Requires visa sponsorship now or later
+                      </Label>
+                    </div>
+                  </div>
+                </section>
+              </>
             )}
 
-            {step === "reviewed" && (
-              <button className="btn btn-primary" onClick={handleConfirmSubmit} disabled={isRunning} style={{ backgroundColor: "var(--accent-emerald)" }}>
-                <Send size={14} />
-                <span>Confirm & Submit Application</span>
-              </button>
+            {step === "running" && (
+              <div className="flex flex-col items-center gap-4 py-8 text-center" role="status">
+                <Loader2 className="size-9 animate-spin text-primary" aria-hidden />
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-base font-semibold text-foreground">Filling the application…</h3>
+                  <p className="max-w-md text-sm text-muted-foreground">
+                    Opening the portal, detecting the ATS, filling your details, uploading your resume and drafting answers.
+                  </p>
+                </div>
+                <ol className="flex w-full max-w-md flex-col gap-2 rounded-xl border border-border bg-muted/50 p-4 text-left text-sm text-muted-foreground">
+                  {[
+                    "Launch the browser and load the portal",
+                    "Detect the ATS and form fields",
+                    "Fill contact details, links and location",
+                    "Upload your resume PDF",
+                    "Answer screening questions with AI",
+                    mode === "auto_submit" ? "Submit and capture the confirmation" : "Capture a preview for your review",
+                  ].map((s, idx) => (
+                    <li key={idx} className="flex items-center gap-2.5">
+                      <span className="text-xs text-muted-foreground tabular-nums">{idx + 1}</span>
+                      {s}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {step === "reviewed" && result && (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--brand-line)] bg-[var(--brand-soft)] p-4">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-semibold text-foreground">
+                        Ready for review{result.atsType ? ` · ${String(result.atsType).toUpperCase()}` : ""}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Filled {result.fieldsFilled?.length || 0} fields. Check the preview before submitting.
+                      </span>
+                    </div>
+                  </div>
+                  <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    size="sm"
+                    aria-label="Preview"
+                    value={previewTab}
+                    onValueChange={(v) => v && setPreviewTab(v as "screenshot" | "fields")}
+                    className="bg-card"
+                  >
+                    <ToggleGroupItem value="screenshot" className="px-3 text-xs">
+                      <Camera aria-hidden />
+                      Screenshot
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="fields" className="px-3 text-xs">
+                      <FileText aria-hidden />
+                      Fields ({result.fieldsFilled?.length || 0})
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+
+                {previewTab === "screenshot" ? (
+                  <div className="max-h-[440px] overflow-y-auto rounded-xl border border-border bg-muted">
+                    {result.screenshotBase64 ? (
+                      <img src={result.screenshotBase64} alt="Filled application form" className="block w-full" />
+                    ) : (
+                      <p className="p-10 text-center text-sm text-muted-foreground">Screenshot unavailable</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="max-h-[440px] overflow-y-auto rounded-xl border border-border">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-muted text-left text-xs text-muted-foreground">
+                        <tr>
+                          <th scope="col" className="px-3 py-2 font-medium">Field</th>
+                          <th scope="col" className="px-3 py-2 font-medium">Category</th>
+                          <th scope="col" className="px-3 py-2 font-medium">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {result.fieldsFilled?.map((f: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className="px-3 py-2 font-medium text-foreground">{f.label || f.field}</td>
+                            <td className="px-3 py-2">
+                              <Badge variant="outline" className="font-normal text-muted-foreground">
+                                {f.category}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2 text-foreground">
+                              {f.type === "ai_generated" && (
+                                <Badge variant="secondary" className="mr-1.5 text-[10px]">
+                                  AI
+                                </Badge>
+                              )}
+                              {f.value}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === "submitted" && result && (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--success)_14%,transparent)]">
+                  <CheckCircle2 className="size-6 text-[var(--success)]" aria-hidden />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground">Application submitted</h3>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  {result.confirmationMessage || `Applied to ${job.title} at ${companyName}.`}
+                </p>
+                <p className="text-xs text-muted-foreground">Recorded and added to your Applications board.</p>
+              </div>
+            )}
+
+            {step === "error" && (
+              <div className="flex flex-col items-center gap-3 py-8 text-center" role="alert">
+                <AlertCircle className="size-8 text-destructive" aria-hidden />
+                <h3 className="text-base font-semibold text-foreground">The application could not be completed</h3>
+                <p className="max-w-md text-sm text-destructive">
+                  {result?.error || result?.reason || logs[logs.length - 1] || "Failed to automate the application form."}
+                </p>
+                <Button variant="outline" onClick={() => setStep("configure")}>
+                  Try again
+                </Button>
+              </div>
+            )}
+
+            {logs.length > 0 && (
+              <Collapsible open={showLogs} onOpenChange={setShowLogs} className="flex flex-col gap-2 border-t border-border pt-3">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="justify-between px-2 text-muted-foreground">
+                    Automation log ({logs.length} events)
+                    <ChevronDown className={cn("transition-transform", showLogs && "rotate-180")} data-icon="inline-end" aria-hidden />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <pre className="max-h-40 overflow-y-auto rounded-lg border border-border bg-muted/60 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground">
+                    {logs.join("\n")}
+                  </pre>
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </div>
         </div>
-      </div>
-    </div>
+
+        <DialogFooter className="flex-row items-center justify-between gap-3 border-t border-border bg-muted/40 px-6 py-3 sm:justify-between">
+          <div>
+            {job.applyUrl && (
+              <Button variant="link" size="sm" asChild className="px-0">
+                <a href={job.applyUrl} target="_blank" rel="noreferrer">
+                  Open original posting
+                  <ExternalLink data-icon="inline-end" aria-hidden />
+                </a>
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={isRunning}>
+              {step === "submitted" ? "Done" : "Cancel"}
+            </Button>
+            {step === "configure" && (
+              <Button onClick={handleStartApply} disabled={isRunning}>
+                <Zap data-icon="inline-start" aria-hidden />
+                {mode === "review" ? "Fill and review" : "Fill and submit"}
+              </Button>
+            )}
+            {step === "reviewed" && (
+              <Button onClick={handleConfirmSubmit} disabled={isRunning}>
+                <Send data-icon="inline-start" aria-hidden />
+                Submit application
+              </Button>
+            )}
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

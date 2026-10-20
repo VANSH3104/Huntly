@@ -20,7 +20,6 @@ import { settingsRouter } from "./routes/settings.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { aiRouter } from "./routes/ai.js";
 import { intelRouter } from "./routes/intel.js";
-import { sandboxRouter } from "./routes/sandbox.js";
 import { autoApplyRouter } from "./routes/auto-apply.js";
 import { autoApplyQueue } from "./crawler/auto-applier/queue.js";
 
@@ -44,7 +43,7 @@ async function bootstrap(): Promise<void> {
   app.use(express.json({ limit: "10mb" }));
 
   // Health check
-  app.get("/health", (_req, res) => {
+  app.get(["/health", "/api/health"], (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
@@ -60,7 +59,6 @@ async function bootstrap(): Promise<void> {
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/intel", intelRouter);
-  app.use("/api/sandbox", sandboxRouter);
   app.use("/api/auto-apply", autoApplyRouter);
 
   // Global error handler

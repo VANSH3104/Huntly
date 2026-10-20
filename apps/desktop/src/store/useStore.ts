@@ -1,13 +1,47 @@
 import { create } from "zustand";
 import type { NavTab, JobFilterState, AdvancedJobFilters } from "../types";
 
-export type ThemeId =
-  | "soft-sand"
-  | "soft-peachy"
-  | "pastel-bliss"
-  | "pastel-dreamland"
-  | "dark"
-  | "light";
+export const THEMES = [
+  { id: "soft-sand", label: "Sand", dark: false, swatch: ["#f6f4ee", "#c8481a", "#231d16"] },
+  { id: "ocean", label: "Ocean", dark: false, swatch: ["#f2f5f9", "#2563eb", "#131f2e"] },
+  { id: "forest", label: "Forest", dark: false, swatch: ["#f2f5ee", "#2c7a4b", "#18221a"] },
+  { id: "pastel-dreamland", label: "Dream", dark: false, swatch: ["#f8f3fc", "#7a4fc2", "#231a2e"] },
+  { id: "dark", label: "Graphite", dark: true, swatch: ["#100e0c", "#ff7f4d", "#f3ede4"] },
+  { id: "midnight", label: "Midnight", dark: true, swatch: ["#0b0f1a", "#7c9cff", "#e8edf8"] },
+] as const;
+
+export type ThemeId = (typeof THEMES)[number]["id"];
+
+const DEFAULT_THEME: ThemeId = "soft-sand";
+const THEME_KEY = "agentforge-theme";
+
+export const isThemeId = (v: unknown): v is ThemeId => THEMES.some((t) => t.id === v);
+export const isDarkTheme = (id: ThemeId) => THEMES.find((t) => t.id === id)?.dark ?? false;
+
+const LAST_KEY = (dark: boolean) => `${THEME_KEY}-last-${dark ? "dark" : "light"}`;
+
+function lastTheme(dark: boolean): ThemeId {
+  try {
+    const saved = localStorage.getItem(LAST_KEY(dark));
+    if (isThemeId(saved) && isDarkTheme(saved) === dark) return saved;
+  } catch {
+    // fall through to defaults
+  }
+  return dark ? "dark" : DEFAULT_THEME;
+}
+
+function applyTheme(theme: ThemeId): void {
+  const root = document.documentElement;
+  root.classList.add("theme-switching");
+  root.setAttribute("data-theme", theme);
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+    localStorage.setItem(LAST_KEY(isDarkTheme(theme)), theme);
+  } catch {
+    // storage blocked; theme still applies for this session
+  }
+  window.setTimeout(() => root.classList.remove("theme-switching"), 250);
+}
 
 interface AppState {
   currentTab: NavTab;
@@ -112,17 +146,17 @@ function saveFilters(filters: JobFilterState): void {
 }
 
 const getInitialTheme = (): ThemeId => {
-  if (typeof window !== "undefined") {
-    const saved = localStorage.getItem("agentforge-theme") as ThemeId | null;
-    if (saved && saved !== ("golden-summer" as any)) return saved;
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (isThemeId(saved)) return saved;
+  } catch {
+    // fall through to default
   }
-  return "soft-sand"; // Default to elegant Soft Sand linen aesthetic
+  return DEFAULT_THEME;
 };
 
 const initialTheme = getInitialTheme();
-if (typeof window !== "undefined") {
-  document.documentElement.setAttribute("data-theme", initialTheme);
-}
+document.documentElement.setAttribute("data-theme", initialTheme);
 
 export const useStore = create<AppState>((set) => ({
   currentTab: "dashboard",
@@ -162,19 +196,13 @@ export const useStore = create<AppState>((set) => ({
 
   theme: initialTheme,
   setTheme: (theme) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("agentforge-theme", theme);
-      document.documentElement.setAttribute("data-theme", theme);
-    }
+    applyTheme(theme);
     set({ theme });
   },
   toggleTheme: () =>
     set((state) => {
-      const nextTheme = state.theme === "dark" ? "soft-sand" : "dark";
-      if (typeof window !== "undefined") {
-        localStorage.setItem("agentforge-theme", nextTheme);
-        document.documentElement.setAttribute("data-theme", nextTheme);
-      }
-      return { theme: nextTheme };
+      const next = lastTheme(!isDarkTheme(state.theme));
+      applyTheme(next);
+      return { theme: next };
     }),
 }));

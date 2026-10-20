@@ -1,7 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Zap, X, ShieldCheck, Eye, Loader2, CheckCircle2, SkipForward, FileUp, AlertTriangle, LogIn, ExternalLink } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Eye, FileUp, Loader2, LogIn, ShieldCheck, SkipForward, Zap } from "lucide-react";
 import { api, type AutoApplyConfig } from "../../lib/api";
 import { useStore } from "../../store/useStore";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
+import { toast } from "@/lib/notify";
+import { ResumeFileCard } from "./ResumeFileCard";
 
 interface Props {
   isOpen: boolean;
@@ -12,15 +21,17 @@ interface Props {
   totalMatching: number;
 }
 
-const field: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 10px",
-  fontSize: "13px",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border-subtle)",
-  borderRadius: "var(--radius-md)",
-  color: "var(--text-primary)",
-};
+const MODES: Array<{ id: AutoApplyConfig["mode"]; title: string; body: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: "tabs", title: "Fill and leave open", body: "Recommended. Fills each job in a browser tab; you check it and click Submit.", icon: ExternalLink },
+  { id: "auto_submit", title: "Fully automatic", body: "Fills and submits by itself. Best for clean forms.", icon: Zap },
+  { id: "review", title: "Preview only", body: "Fills and saves a screenshot, then closes. Nothing is sent.", icon: Eye },
+];
+
+const choiceItem = cn(
+  "h-auto flex-col items-start gap-1 rounded-xl border border-border bg-card p-3 text-left whitespace-normal shadow-none",
+  "hover:border-[var(--border-hover)] hover:bg-card hover:text-foreground",
+  "data-[state=on]:border-primary data-[state=on]:bg-[var(--brand-soft)] data-[state=on]:text-foreground"
+);
 
 export const AutoApplyLauncher: React.FC<Props> = ({ isOpen, onClose, jobIds, totalMatching }) => {
   const setDockOpen = useStore((s) => s.setIsAutoApplyDockOpen);
@@ -54,7 +65,7 @@ export const AutoApplyLauncher: React.FC<Props> = ({ isOpen, onClose, jobIds, to
       .catch((e) => setError(e.message));
   }, [isOpen, jobIds]);
 
-  if (!isOpen || !config) return null;
+  if (!config) return null;
 
   const fresh = preview?.fresh ?? 0;
   const willApply = Math.min(limit, fresh);
@@ -87,6 +98,9 @@ export const AutoApplyLauncher: React.FC<Props> = ({ isOpen, onClose, jobIds, to
       if (!ready?.resumePdf) throw new Error("Upload your resume as a PDF first. Most forms require a file.");
       await api.autoApply.saveConfig({ ...config, maxPerRun: limit });
       await api.autoApply.enqueue({ jobIds, mode: config.mode, limit });
+      toast.success(`Auto-apply started for ${willApply} ${willApply === 1 ? "job" : "jobs"}`, {
+        description: "Progress shows in the Auto-apply panel.",
+      });
       setDockOpen(true);
       onClose();
     } catch (e: any) {
@@ -96,238 +110,218 @@ export const AutoApplyLauncher: React.FC<Props> = ({ isOpen, onClose, jobIds, to
     }
   };
 
-  const modeCard = (value: AutoApplyConfig["mode"], title: string, body: string, icon: React.ReactNode) => {
-    const active = config.mode === value;
-    return (
-      <button
-        type="button"
-        onClick={() => setConfig({ ...config, mode: value })}
-        style={{
-          flex: 1,
-          textAlign: "left",
-          padding: "12px",
-          borderRadius: "var(--radius-md)",
-          cursor: "pointer",
-          border: `1px solid ${active ? "var(--border-active)" : "var(--border-subtle)"}`,
-          background: active ? "rgba(79, 70, 229, 0.06)" : "var(--bg-card)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "4px",
-        }}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>
-          {icon} {title}
-        </span>
-        <span style={{ fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.4 }}>{body}</span>
-      </button>
-    );
-  };
+  const needsSetup = ready && (ready.missing.length > 0 || ready.needsCity);
+  const stats = [
+    { label: "Match your filters", value: totalMatching.toLocaleString(), tone: "text-foreground" },
+    { label: "New, will apply", value: preview ? fresh.toLocaleString() : "…", tone: "text-[var(--success)]" },
+    { label: "Skipped (done or queued)", value: preview ? skippedApplied.toLocaleString() : "…", tone: "text-muted-foreground" },
+  ];
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1100,
-        background: "rgba(28, 25, 23, 0.55)",
-        backdropFilter: "blur(6px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px",
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        className="glass-panel"
-        style={{
-          width: "100%",
-          maxWidth: "520px",
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-subtle)",
-          borderRadius: "var(--radius-xl)",
-          boxShadow: "var(--shadow-lg)",
-          padding: "22px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "var(--gradient-brand)", display: "grid", placeItems: "center", color: "#fff" }}>
-              <Zap size={18} />
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: "16px", color: "var(--text-primary)" }}>Auto-Apply to filtered jobs</div>
-              <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Runs in the background. Keep working while it applies.</div>
-            </div>
-          </div>
-          <button className="btn-icon" onClick={onClose} aria-label="Close">
-            <X size={16} />
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex max-h-[min(880px,calc(100vh-3rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]">
+        <DialogHeader className="border-b border-border px-6 pt-5 pb-4 pr-14 text-left">
+          <DialogTitle className="font-sans text-lg font-semibold tracking-tight">Auto-apply to filtered jobs</DialogTitle>
+          <DialogDescription>Runs in the background, so you can keep working while it applies.</DialogDescription>
+        </DialogHeader>
 
-        {totalMatching > jobIds.length && (
-          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "-6px" }}>
-            Checking the first {jobIds.length} of {totalMatching} matches. Run it again for the rest.
-          </div>
-        )}
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+          {totalMatching > jobIds.length && (
+            <p className="text-xs text-muted-foreground">
+              Checking the first {jobIds.length.toLocaleString()} of {totalMatching.toLocaleString()} matches. Run it again for the rest.
+            </p>
+          )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
-          {[
-            { label: "Match your filters", value: totalMatching, color: "var(--text-primary)" },
-            { label: "New, will apply", value: preview ? fresh : "…", color: "var(--accent-emerald)" },
-            { label: "Skipped (done / queued)", value: preview ? skippedApplied : "…", color: "var(--text-muted)" },
-          ].map((s) => (
-            <div key={s.label} style={{ padding: "10px 12px", borderRadius: "var(--radius-md)", background: "var(--bg-secondary)", border: "1px solid var(--border-subtle)" }}>
-              <div style={{ fontSize: "20px", fontWeight: 700, color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {ready && (ready.missing.length > 0 || !ready.resumePdf || ready.needsCity) && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "12px", borderRadius: "var(--radius-md)", background: "rgba(217, 119, 6, 0.07)", border: "1px solid rgba(217, 119, 6, 0.25)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 600, color: "var(--accent-amber)" }}>
-              <AlertTriangle size={14} /> One-time setup. Saved for every future application.
-            </div>
-            {ready.missing.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
-                <input placeholder="Full name" value={me.fullName} onChange={(e) => setMe({ ...me, fullName: e.target.value })} style={field} />
-                <input placeholder="Email" value={me.email} onChange={(e) => setMe({ ...me, email: e.target.value })} style={field} />
-                <input placeholder="Phone" value={me.phone} onChange={(e) => setMe({ ...me, phone: e.target.value })} style={field} />
+          <dl className="grid grid-cols-3 gap-2.5">
+            {stats.map((s) => (
+              <div key={s.label} className="flex flex-col gap-0.5 rounded-xl border border-border bg-muted/50 px-3 py-2.5">
+                <dd className={cn("text-xl font-semibold tabular-nums", s.tone)}>{s.value}</dd>
+                <dt className="text-xs text-muted-foreground">{s.label}</dt>
               </div>
-            )}
-            {ready.needsCity && (
-              <input placeholder="Your city, country (for example Noida, India)" value={me.city} onChange={(e) => setMe({ ...me, city: e.target.value })} style={field} />
-            )}
-            {!ready.resumePdf && (
-              <label className="btn btn-secondary" style={{ alignSelf: "flex-start", cursor: "pointer", fontSize: "12px" }}>
-                {uploading ? <Loader2 size={13} className="animate-spin" /> : <FileUp size={13} />}
-                <span>Upload resume PDF</span>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  style={{ display: "none" }}
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    try {
-                      setUploading(true);
-                      await api.autoApply.uploadResumePdf(f);
-                      await loadReadiness();
-                    } catch (err: any) {
-                      setError(err.message);
-                    } finally {
-                      setUploading(false);
-                    }
-                  }}
-                />
-              </label>
-            )}
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: "10px" }}>
-          {modeCard("tabs", "Fill & leave open", "Recommended. Fills each job in a browser tab. You glance and click Submit.", <ExternalLink size={14} color="var(--accent-indigo)" />)}
-          {modeCard("auto_submit", "Fully automatic", "Fills and submits by itself. Best for clean forms.", <Zap size={14} color="var(--accent-emerald)" />)}
-          {modeCard("review", "Preview only", "Fills and shows a screenshot, then closes. Nothing is sent.", <Eye size={14} color="var(--text-muted)" />)}
-        </div>
-
-        {config.mode === "tabs" && (
-          <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "var(--text-secondary)" }}>
-            Tabs open at once
-            <input type="number" min={1} max={30} value={config.tabBatch} onChange={(e) => setConfig({ ...config, tabBatch: Math.max(1, Math.min(30, Number(e.target.value) || 1)) })} style={{ ...field, width: "80px" }} />
-            <span style={{ color: "var(--text-muted)" }}>The next jobs open as you submit or close tabs.</span>
-          </label>
-        )}
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--text-secondary)" }}>
-            Apply to at most (this run)
-            <input type="number" min={1} max={500} value={limit} onChange={(e) => setLimit(Math.max(1, Number(e.target.value) || 1))} style={field} />
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--text-secondary)" }}>
-            Daily cap (safety)
-            <input type="number" min={1} max={500} value={config.dailyCap} onChange={(e) => setConfig({ ...config, dailyCap: Math.max(1, Number(e.target.value) || 1) })} style={field} />
-          </label>
-        </div>
-
-        <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "12px", color: "var(--text-secondary)", cursor: "pointer" }}>
-          <input type="checkbox" checked={config.fillGaps} onChange={(e) => setConfig({ ...config, fillGaps: e.target.checked })} style={{ marginTop: 2 }} />
-          <span>
-            <b style={{ color: "var(--text-primary)" }}>Never stop on a question.</b> If a required question is unclear, answer it with the best guess from your resume instead of asking me.
-          </span>
-        </label>
-
-        <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "12px", color: "var(--text-secondary)", cursor: "pointer" }}>
-          <input type="checkbox" checked={config.onCaptcha === "wait"} onChange={(e) => setConfig({ ...config, onCaptcha: e.target.checked ? "wait" : "skip" })} style={{ marginTop: 2 }} />
-          <span>
-            <b style={{ color: "var(--text-primary)" }}>If a captcha appears, let me solve it.</b> A browser window opens on that job, you tick the captcha, and it submits for you.
-          </span>
-        </label>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>When a job needs you to sign in</div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {([
-              ["skip", "Skip it and list it for later"],
-              ["wait", "Pause and let me sign in"],
-            ] as const).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setConfig({ ...config, onLogin: value })}
-                style={{
-                  flex: 1,
-                  padding: "8px 10px",
-                  fontSize: "12px",
-                  borderRadius: "var(--radius-md)",
-                  cursor: "pointer",
-                  color: "var(--text-primary)",
-                  border: `1px solid ${config.onLogin === value ? "var(--border-active)" : "var(--border-subtle)"}`,
-                  background: config.onLogin === value ? "rgba(79, 70, 229, 0.06)" : "var(--bg-card)",
-                }}
-              >
-                {label}
-              </button>
             ))}
+          </dl>
+
+          {needsSetup && (
+            <section className="flex flex-col gap-3 rounded-xl border border-[color-mix(in_srgb,var(--warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)] p-4">
+              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <AlertTriangle className="size-4 text-[var(--warning)]" aria-hidden />
+                One-time setup, saved for every future application
+              </p>
+              {ready.missing.length > 0 && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <Input aria-label="Full name" placeholder="Full name" autoComplete="name" value={me.fullName} onChange={(e) => setMe({ ...me, fullName: e.target.value })} className="bg-card" />
+                  <Input aria-label="Email" type="email" placeholder="Email" autoComplete="email" value={me.email} onChange={(e) => setMe({ ...me, email: e.target.value })} className="bg-card" />
+                  <Input aria-label="Phone" type="tel" placeholder="Phone" autoComplete="tel" value={me.phone} onChange={(e) => setMe({ ...me, phone: e.target.value })} className="bg-card" />
+                </div>
+              )}
+              {ready.needsCity && (
+                <Input
+                  aria-label="City and country"
+                  placeholder="Your city and country, e.g. Noida, India"
+                  value={me.city}
+                  onChange={(e) => setMe({ ...me, city: e.target.value })}
+                  className="bg-card"
+                />
+              )}
+            </section>
+          )}
+
+          {ready && (
+            <section className="flex flex-col gap-2.5">
+              <h3 className="text-sm font-semibold text-foreground">Resume</h3>
+              <ResumeFileCard resume={ready.resumePdf} onChange={loadReadiness} />
+            </section>
+          )}
+
+          <section className="flex flex-col gap-2.5">
+            <h3 id="aal-mode" className="text-sm font-semibold text-foreground">
+              Mode
+            </h3>
+            <ToggleGroup
+              type="single"
+              aria-labelledby="aal-mode"
+              value={config.mode}
+              onValueChange={(v) => v && setConfig({ ...config, mode: v as AutoApplyConfig["mode"] })}
+              className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-3"
+            >
+              {MODES.map((m) => (
+                <ToggleGroupItem key={m.id} value={m.id} className={choiceItem}>
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                    <m.icon className="size-3.5 text-primary" aria-hidden />
+                    {m.title}
+                  </span>
+                  <span className="text-xs leading-relaxed font-normal text-muted-foreground">{m.body}</span>
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </section>
+
+          {config.mode === "tabs" && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Label htmlFor="aal-tabs">Tabs open at once</Label>
+              <Input
+                id="aal-tabs"
+                type="number"
+                min={1}
+                max={30}
+                value={config.tabBatch}
+                onChange={(e) => setConfig({ ...config, tabBatch: Math.max(1, Math.min(30, Number(e.target.value) || 1)) })}
+                className="w-20"
+              />
+              <span className="text-xs text-muted-foreground">The next jobs open as you submit or close tabs.</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="aal-limit">Apply to at most (this run)</Label>
+              <Input id="aal-limit" type="number" min={1} max={500} value={limit} onChange={(e) => setLimit(Math.max(1, Number(e.target.value) || 1))} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="aal-cap">Daily cap</Label>
+              <Input
+                id="aal-cap"
+                type="number"
+                min={1}
+                max={500}
+                value={config.dailyCap}
+                onChange={(e) => setConfig({ ...config, dailyCap: Math.max(1, Number(e.target.value) || 1) })}
+              />
+            </div>
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ alignSelf: "flex-start", fontSize: "12px" }}
-            onClick={() => api.autoApply.connectLinkedIn().catch((e) => setError(e.message))}
-          >
-            <LogIn size={13} /> <span>Connect LinkedIn (opens a window, sign in once)</span>
-          </button>
+
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <Checkbox id="aal-gaps" checked={config.fillGaps} onCheckedChange={(v) => setConfig({ ...config, fillGaps: v === true })} className="mt-0.5" />
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="aal-gaps">Never stop on a question</Label>
+                <p className="text-xs text-muted-foreground">If a required question is unclear, answer it with the best guess from your resume.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="aal-captcha"
+                checked={config.onCaptcha === "wait"}
+                onCheckedChange={(v) => setConfig({ ...config, onCaptcha: v === true ? "wait" : "skip" })}
+                className="mt-0.5"
+              />
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="aal-captcha">Let me solve captchas</Label>
+                <p className="text-xs text-muted-foreground">A browser window opens on that job; tick the captcha and it submits for you.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Checkbox id="aal-watch" checked={!config.headless} onCheckedChange={(v) => setConfig({ ...config, headless: v !== true })} className="mt-0.5" />
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="aal-watch">Watch the browser while it applies</Label>
+                <p className="text-xs text-muted-foreground">Opens a visible window.</p>
+              </div>
+            </div>
+          </div>
+
+          <section className="flex flex-col gap-2.5">
+            <h3 id="aal-login" className="text-sm font-semibold text-foreground">
+              When a job needs you to sign in
+            </h3>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              aria-labelledby="aal-login"
+              value={config.onLogin}
+              onValueChange={(v) => v && setConfig({ ...config, onLogin: v as AutoApplyConfig["onLogin"] })}
+              className="w-full"
+            >
+              <ToggleGroupItem value="skip" className="flex-1 text-xs data-[state=on]:bg-[var(--brand-soft)]">
+                Skip it and list it for later
+              </ToggleGroupItem>
+              <ToggleGroupItem value="wait" className="flex-1 text-xs data-[state=on]:bg-[var(--brand-soft)]">
+                Pause and let me sign in
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => api.autoApply.connectLinkedIn().catch((e) => setError(e.message))}
+            >
+              <LogIn data-icon="inline-start" aria-hidden />
+              Connect LinkedIn
+            </Button>
+          </section>
+
+          <p className="flex items-start gap-2.5 rounded-xl border border-border bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-[var(--success)]" aria-hidden />
+            Jobs already on your board, already submitted, or the same posting under another link are skipped. A job is only marked
+            applied after the site confirms it.
+          </p>
+
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
         </div>
 
-        <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--text-secondary)", cursor: "pointer" }}>
-          <input type="checkbox" checked={!config.headless} onChange={(e) => setConfig({ ...config, headless: !e.target.checked })} />
-          Watch the browser while it applies (opens a visible window)
-        </label>
-
-        <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", fontSize: "12px", color: "var(--text-secondary)", background: "rgba(5, 150, 105, 0.07)", border: "1px solid rgba(5, 150, 105, 0.2)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>
-          <ShieldCheck size={15} color="var(--accent-emerald)" style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>
-            Jobs already on your board, already submitted, or the same posting under another link are skipped. A job is only marked applied after the site confirms it.
-          </span>
-        </div>
-
-        {error && <div style={{ fontSize: "12px", color: "var(--accent-rose)" }}>{error}</div>}
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-          <button className="btn btn-secondary" onClick={onClose}>
+        <DialogFooter className="border-t border-border bg-muted/40 px-6 py-3">
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" onClick={start} disabled={starting || !preview || fresh === 0}>
-            {starting ? <Loader2 size={14} className="animate-spin" /> : fresh === 0 && preview ? <SkipForward size={14} /> : <CheckCircle2 size={14} />}
-            <span>{preview && fresh === 0 ? "Nothing new to apply" : config.mode === "tabs" ? `Open ${willApply} jobs in the browser` : `Start applying to ${willApply} jobs`}</span>
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button onClick={start} disabled={starting || !preview || fresh === 0}>
+            {starting ? (
+              <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
+            ) : fresh === 0 && preview ? (
+              <SkipForward data-icon="inline-start" aria-hidden />
+            ) : (
+              <CheckCircle2 data-icon="inline-start" aria-hidden />
+            )}
+            {preview && fresh === 0
+              ? "Nothing new to apply"
+              : config.mode === "tabs"
+                ? `Open ${willApply} jobs in the browser`
+                : `Start applying to ${willApply} jobs`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

@@ -1,44 +1,59 @@
-import React, { useEffect } from "react";
-import { Command } from "cmdk";
-import { useStore } from "../../store/useStore";
+import React, { useEffect, useState } from "react";
 import {
-  Search,
-  Briefcase,
-  Cpu,
-  Compass,
-  FileText,
   BarChart3,
-  Settings,
+  Briefcase,
+  CheckSquare,
+  Compass,
+  Cpu,
+  FileText,
   Flame,
-  CheckCircle2,
+  Loader2,
+  Settings,
+  Sparkles,
+  type LucideIcon,
 } from "lucide-react";
+import { useStore } from "../../store/useStore";
 import { api } from "../../lib/api";
+import { toast, errorMessage } from "@/lib/notify";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from "@/components/ui/command";
 import type { NavTab } from "../../types";
 
+const NAV_ITEMS: { tab: NavTab; label: string; hint: string; icon: LucideIcon; keywords: string[] }[] = [
+  { tab: "dashboard", label: "Overview", hint: "Dashboard", icon: Cpu, keywords: ["home", "dashboard", "stats"] },
+  { tab: "jobs", label: "Job Feed", hint: "Verified roles", icon: Briefcase, keywords: ["jobs", "matches", "browse"] },
+  { tab: "radar", label: "Tech Radar", hint: "News and research", icon: Sparkles, keywords: ["news", "hn", "arxiv"] },
+  { tab: "discovery", label: "Discovery", hint: "Career pages and ATS", icon: Compass, keywords: ["sources", "probe", "crawl"] },
+  { tab: "applications", label: "Applications", hint: "Pipeline board", icon: CheckSquare, keywords: ["kanban", "pipeline"] },
+  { tab: "resume", label: "Resume Studio", hint: "LaTeX resume", icon: FileText, keywords: ["latex", "cv", "resume"] },
+  { tab: "analytics", label: "Market Insights", hint: "Demand trends", icon: BarChart3, keywords: ["analytics", "charts", "skills"] },
+  { tab: "settings", label: "Settings", hint: "Keys and preferences", icon: Settings, keywords: ["api", "keys", "config"] },
+];
+
 export const CommandPalette: React.FC = () => {
-  const {
-    isCommandPaletteOpen,
-    setIsCommandPaletteOpen,
-    setCurrentTab,
-    setSelectedJobId,
-  } = useStore();
+  const { isCommandPaletteOpen, setIsCommandPaletteOpen, setCurrentTab } = useStore();
+  const [isStartingCrawl, setIsStartingCrawl] = useState(false);
 
-  const [search, setSearch] = React.useState("");
-  const [crawlStatus, setCrawlStatus] = React.useState<string | null>(null);
-
-  // Toggle with Cmd+K / Ctrl+K
+  // Toggle with Cmd+K / Ctrl+K. Reads the store directly so the listener never goes stale.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setIsCommandPaletteOpen(!isCommandPaletteOpen);
+        const { isCommandPaletteOpen: open, setIsCommandPaletteOpen: setOpen } = useStore.getState();
+        setOpen(!open);
       }
     };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, [isCommandPaletteOpen, setIsCommandPaletteOpen]);
-
-  if (!isCommandPaletteOpen) return null;
+  }, []);
 
   const navigateTo = (tab: NavTab) => {
     setCurrentTab(tab);
@@ -46,281 +61,72 @@ export const CommandPalette: React.FC = () => {
   };
 
   const triggerCrawlNow = async () => {
-    setCrawlStatus("Starting crawl...");
+    setIsStartingCrawl(true);
     try {
       await api.crawl.start({ scope: "quick" });
-      setCrawlStatus("Crawl launched!");
-      setTimeout(() => {
-        setIsCommandPaletteOpen(false);
-        setCurrentTab("discovery");
-      }, 700);
-    } catch (err: any) {
-      setCrawlStatus(`Failed: ${err.message}`);
+      toast.success("Discovery started", { description: "The crawl worker is scanning sources in the background." });
+      setIsCommandPaletteOpen(false);
+      setCurrentTab("discovery");
+    } catch (err) {
+      toast.error("Could not start discovery", { description: errorMessage(err) });
+    } finally {
+      setIsStartingCrawl(false);
     }
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        background: "rgba(0, 0, 0, 0.75)",
-        backdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        paddingTop: "12vh",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) setIsCommandPaletteOpen(false);
-      }}
+    <CommandDialog
+      open={isCommandPaletteOpen}
+      onOpenChange={setIsCommandPaletteOpen}
+      title="Command palette"
+      description="Search for a page or run an action"
+      className="top-[18vh] translate-y-0 sm:max-w-xl"
     >
-      <div
-        className="glass-panel"
-        style={{
-          width: "100%",
-          maxWidth: "600px",
-          overflow: "hidden",
-          border: "1px solid rgba(59, 130, 246, 0.3)",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7)",
-        }}
-      >
-        <Command
-          style={{
-            background: "transparent",
-            color: "var(--text-primary)",
-            width: "100%",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              padding: "16px 20px",
-              borderBottom: "1px solid var(--border-subtle)",
-            }}
+      <CommandInput
+        placeholder="Search pages and actions…"
+        aria-label="Search pages and actions"
+        className="rounded-none border-0 bg-transparent px-0 shadow-none focus:shadow-none"
+      />
+      <CommandList className="max-h-[min(420px,60vh)] pb-1">
+        <CommandEmpty>No matching commands.</CommandEmpty>
+        <CommandGroup heading="Actions">
+          <CommandItem
+            value="run discovery crawl ats web"
+            onSelect={triggerCrawlNow}
+            disabled={isStartingCrawl}
           >
-            <Search size={18} color="var(--accent-cyan)" />
-            <Command.Input
-              value={search}
-              onValueChange={setSearch}
-              placeholder="Search commands, navigate, or trigger discovery..."
-              style={{
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                fontSize: "15px",
-                color: "var(--text-primary)",
-                padding: 0,
-              }}
-              autoFocus
-            />
-            <kbd
-              style={{
-                background: "var(--bg-surface)",
-                padding: "2px 6px",
-                borderRadius: "4px",
-                fontSize: "11px",
-                color: "var(--text-muted)",
-              }}
-            >
-              ESC
-            </kbd>
-          </div>
-
-          {crawlStatus && (
-            <div
-              style={{
-                padding: "8px 20px",
-                background: "rgba(6, 182, 212, 0.1)",
-                color: "var(--accent-cyan)",
-                fontSize: "12px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <CheckCircle2 size={14} /> {crawlStatus}
-            </div>
-          )}
-
-          <Command.List
-            style={{
-              maxHeight: "360px",
-              overflowY: "auto",
-              padding: "8px",
-            }}
-          >
-            <Command.Empty
-              style={{
-                padding: "24px",
-                textAlign: "center",
-                color: "var(--text-muted)",
-                fontSize: "13px",
-              }}
-            >
-              No matching results found.
-            </Command.Empty>
-
-            <Command.Group
-              heading="Actions"
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                color: "var(--text-muted)",
-                padding: "8px 12px 4px",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              <Command.Item
-                onSelect={triggerCrawlNow}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
+            {isStartingCrawl ? <Loader2 className="animate-spin" /> : <Flame className="text-primary" />}
+            <span>{isStartingCrawl ? "Starting discovery…" : "Run discovery now"}</span>
+            <CommandShortcut className="tracking-normal">Quick crawl</CommandShortcut>
+          </CommandItem>
+        </CommandGroup>
+        <CommandSeparator />
+        <CommandGroup heading="Go to">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <CommandItem
+                key={item.tab}
+                value={`${item.label} ${item.keywords.join(" ")}`}
+                onSelect={() => navigateTo(item.tab)}
               >
-                <Flame size={16} color="var(--accent-amber)" />
-                <span style={{ flex: 1 }}>Trigger Instant Web & ATS Crawl</span>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  Execute query generation
-                </span>
-              </Command.Item>
-            </Command.Group>
-
-            <Command.Group
-              heading="Navigation"
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                color: "var(--text-muted)",
-                padding: "8px 12px 4px",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              <Command.Item
-                onSelect={() => navigateTo("dashboard")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
-              >
-                <Cpu size={16} color="var(--accent-cyan)" />
-                <span>Go to Intelligence Dashboard</span>
-              </Command.Item>
-
-              <Command.Item
-                onSelect={() => navigateTo("jobs")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
-              >
-                <Briefcase size={16} color="var(--accent-blue)" />
-                <span>Browse Verified Jobs & Matches</span>
-              </Command.Item>
-
-              <Command.Item
-                onSelect={() => navigateTo("discovery")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
-              >
-                <Compass size={16} color="var(--accent-emerald)" />
-                <span>Career Page Discovery & ATS Monitor</span>
-              </Command.Item>
-
-              <Command.Item
-                onSelect={() => navigateTo("applications")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
-              >
-                <CheckCircle2 size={16} color="var(--accent-purple)" />
-                <span>Applications Kanban Board</span>
-              </Command.Item>
-
-              <Command.Item
-                onSelect={() => navigateTo("resume")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
-              >
-                <FileText size={16} color="var(--accent-cyan)" />
-                <span>Resume Studio & LaTeX Tailoring</span>
-              </Command.Item>
-
-              <Command.Item
-                onSelect={() => navigateTo("analytics")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
-              >
-                <BarChart3 size={16} color="var(--accent-amber)" />
-                <span>Analytics & Market Insights</span>
-              </Command.Item>
-
-              <Command.Item
-                onSelect={() => navigateTo("settings")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "13px",
-                }}
-              >
-                <Settings size={16} color="var(--text-secondary)" />
-                <span>Settings & API Configuration</span>
-              </Command.Item>
-            </Command.Group>
-          </Command.List>
-        </Command>
+                <Icon />
+                <span>{item.label}</span>
+                <CommandShortcut className="tracking-normal">{item.hint}</CommandShortcut>
+              </CommandItem>
+            );
+          })}
+        </CommandGroup>
+      </CommandList>
+      <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <kbd>↑</kbd>
+          <kbd>↓</kbd> to move <kbd>↵</kbd> to select
+        </span>
+        <span className="flex items-center gap-1.5">
+          <kbd>Esc</kbd> to close
+        </span>
       </div>
-    </div>
+    </CommandDialog>
   );
 };

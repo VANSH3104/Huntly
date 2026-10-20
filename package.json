@@ -2,6 +2,7 @@
   "name": "agentforge",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "AI-powered Job Intelligence OS",
   "scripts": {
     "dev": "pnpm --filter @agentforge/desktop dev",

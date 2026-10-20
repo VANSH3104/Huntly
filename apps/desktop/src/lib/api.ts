@@ -48,7 +48,18 @@ export interface AutoApplyQueueState {
   submittedToday: number;
 }
 
-export type FacetBucket = { value: string; count: number };
+export interface ResumeRecord {
+  id: string;
+  name: string;
+  latex: string;
+  /** JSON string of the parsed resume; parse before use. */
+  parsedJson: string | null;
+  hash: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export type FacetBucket ={ value: string; count: number };
 export type JobFacets = Record<"ats" | "employmentType" | "country" | "company", FacetBucket[]>;
 
 export interface BoardScrapeResult {
@@ -328,14 +339,20 @@ export const api = {
 
   // Resumes
   resumes: {
-    list: () => request<any[]>("/resumes"),
+    list: () => request<ResumeRecord[]>("/resumes"),
     getActive: () => request<any>("/resumes/active"),
-    create: (data: { name: string; latex: string; makeActive?: boolean }) =>
-      request<any>("/resumes", { method: "POST", body: JSON.stringify(data) }),
+    create: (data: { name: string; latex: string; setActive?: boolean }) =>
+      request<{ id: string; name: string; hash: string; isActive: boolean }>("/resumes", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: { name?: string; latex?: string }) =>
+      request<ResumeRecord>(`/resumes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: string) => request<{ ok: boolean }>(`/resumes/${id}`, { method: "DELETE" }),
     setActive: (id: string) =>
       request<any>(`/resumes/${id}/activate`, { method: "POST" }),
     compile: (data?: { latex?: string; resumeId?: string; filename?: string }) =>
-      request<{ success: boolean; filename: string; pdfBase64?: string; error?: string }>(
+      request<{ success: boolean; filename: string; pdfBase64?: string; error?: string; log?: string }>(
         "/resumes/compile",
         {
           method: "POST",
@@ -405,67 +422,6 @@ export const api = {
         markdownContent: string;
         codeExample?: string;
       }>("/intel/deep-dive", { method: "POST", body: JSON.stringify(params) }),
-  },
-
-  // Agent Sandbox Environment
-  sandbox: {
-    list: () => request<any[]>("/sandbox"),
-    create: (data: { id?: string; timeoutSeconds?: number; persistent?: boolean; metadata?: Record<string, string> } = {}) =>
-      request<any>("/sandbox", { method: "POST", body: JSON.stringify(data) }),
-    get: (id: string) => request<any>(`/sandbox/${id}`),
-    terminate: (id: string) => request<any>(`/sandbox/${id}`, { method: "DELETE" }),
-    execCommand: (id: string, command: string, cwd?: string, timeoutSeconds?: number) =>
-      request<{
-        commandId: string;
-        command: string;
-        stdout: string;
-        stderr: string;
-        exitCode: number | null;
-        durationMs: number;
-        timedOut: boolean;
-        status: "completed" | "failed" | "timed_out" | "running";
-      }>(`/sandbox/${id}/commands`, {
-        method: "POST",
-        body: JSON.stringify({ command, cwd, timeoutSeconds }),
-      }),
-    listFiles: (id: string, path: string = ".") =>
-      request<{ files: Array<{ name: string; path: string; isDirectory: boolean; sizeBytes: number; updatedAt: string }> }>(
-        `/sandbox/${id}/files/list?path=${encodeURIComponent(path)}`
-      ),
-    readFile: (id: string, path: string) =>
-      request<{ content: string; sizeBytes: number }>(`/sandbox/${id}/files?path=${encodeURIComponent(path)}`),
-    writeFile: (id: string, path: string, content: string) =>
-      request<{ success: boolean; path: string; bytesWritten: number }>(`/sandbox/${id}/files`, {
-        method: "POST",
-        body: JSON.stringify({ path, content }),
-      }),
-    browser: {
-      getStatus: () => request<any>("/sandbox/browser/status"),
-      navigate: (url: string, viewport?: { width: number; height: number }) =>
-        request<any>("/sandbox/browser/navigate", {
-          method: "POST",
-          body: JSON.stringify({ url, viewport }),
-        }),
-      click: (coords?: { x?: number; y?: number; selector?: string }) =>
-        request<any>("/sandbox/browser/click", {
-          method: "POST",
-          body: JSON.stringify(coords || {}),
-        }),
-      type: (text: string, selector?: string) =>
-        request<any>("/sandbox/browser/type", {
-          method: "POST",
-          body: JSON.stringify({ text, selector }),
-        }),
-      scroll: (deltaY: number = 300) =>
-        request<any>("/sandbox/browser/scroll", {
-          method: "POST",
-          body: JSON.stringify({ deltaY }),
-        }),
-      back: () => request<any>("/sandbox/browser/back", { method: "POST" }),
-      forward: () => request<any>("/sandbox/browser/forward", { method: "POST" }),
-      reload: () => request<any>("/sandbox/browser/reload", { method: "POST" }),
-      close: () => request<any>("/sandbox/browser/close", { method: "POST" }),
-    },
   },
 
   // Autonomous Job Application Crawler (Auto-Applier)
@@ -548,6 +504,8 @@ export const api = {
         headers: { "Content-Type": "application/pdf" },
         body: await file.arrayBuffer(),
       }),
+    deleteResumePdf: () => request<{ ok: boolean }>("/auto-apply/resume-pdf", { method: "DELETE" }),
+    resumePdfUrl: (version?: number) => `/api/auto-apply/resume-pdf${version ? `?v=${version}` : ""}`,
     getConfig: () => request<AutoApplyConfig>("/auto-apply/config"),
     saveConfig: (patch: Partial<AutoApplyConfig>) =>
       request<AutoApplyConfig>("/auto-apply/config", { method: "PUT", body: JSON.stringify(patch) }),

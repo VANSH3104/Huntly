@@ -1,21 +1,42 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import {
+  Activity,
+  ArrowRight,
+  Briefcase,
+  Building2,
+  CheckSquare,
+  Compass,
+  MapPin,
+  Sparkles,
+  Target,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { useStore } from "../store/useStore";
 import { ScoreRing } from "../components/common/ScoreRing";
 import { Badge } from "../components/common/Badge";
 import {
-  Briefcase,
-  TrendingUp,
-  FileCheck,
-  Globe2,
-  ExternalLink,
-  ArrowRight,
-  Sparkles,
-  MapPin,
-  Clock,
-  Layers,
-} from "lucide-react";
+  PageContainer,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  StatCard,
+  EventTimeline,
+  listContainer,
+  listItem,
+} from "../components/common/PagePrimitives";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+
+function jobLocation(job: any): string {
+  const loc = job.location;
+  if (!loc) return "Location not listed";
+  const place = [loc.city, loc.country].filter(Boolean).join(", ");
+  if (loc.remote) return place ? `Remote · ${place}` : "Remote";
+  return place || "Location not listed";
+}
 
 export const DashboardView: React.FC = () => {
   const { setCurrentTab, setSelectedJobId } = useStore();
@@ -30,333 +51,173 @@ export const DashboardView: React.FC = () => {
     queryFn: () => api.jobs.list({ limit: 5, sortBy: "matchScore", sortOrder: "desc" }),
   });
 
-  const { data: crawlEvents } = useQuery({
-    queryKey: ["crawl", "events"],
-    queryFn: () => api.crawl.events(6),
+  const { data: crawlEvents, isLoading: isEventsLoading } = useQuery({
+    queryKey: ["crawl", "events", 8],
+    queryFn: () => api.crawl.events(8),
     refetchInterval: 5000,
   });
 
   const stats = [
     {
-      label: "Discovered Jobs",
-      value: analytics?.totalJobs ?? 0,
-      sub: "Active verified positions",
+      label: "Active jobs",
+      value: analytics?.activeJobs ?? analytics?.totalJobs,
+      hint: analytics?.newToday != null ? `+${analytics.newToday.toLocaleString()} discovered today` : "Verified open positions",
       icon: Briefcase,
-      color: "var(--accent-cyan)",
+      accent: true,
     },
     {
-      label: "Top Match Score",
-      value: analytics?.topMatchScore ? `${Math.round(analytics.topMatchScore * 100)}%` : "94%",
-      sub: "Resume skill overlap",
-      icon: TrendingUp,
-      color: "var(--accent-emerald)",
+      label: "Strong matches",
+      value: analytics?.highMatchJobs,
+      hint: "Roles above your match threshold",
+      icon: Target,
     },
     {
-      label: "Active Applications",
-      value: analytics?.activeApplications ?? 0,
-      sub: "In progress / interviews",
-      icon: FileCheck,
-      color: "var(--accent-purple)",
+      label: "Companies",
+      value: analytics?.totalCompanies,
+      hint: "Employers with open roles",
+      icon: Building2,
     },
     {
-      label: "Official Sources",
-      value: analytics?.monitoredSources ?? 14,
-      sub: "Greenhouse, Lever, Ashby",
-      icon: Globe2,
-      color: "var(--accent-amber)",
+      label: "Applications",
+      value: analytics?.totalApplications ?? analytics?.activeApplications,
+      hint: "Tracked in your pipeline",
+      icon: CheckSquare,
     },
   ];
 
+  const jobs: any[] = topJobs?.jobs ?? [];
+  const events: any[] = crawlEvents ?? [];
+
   return (
-    <div className="page-container" style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
-      {/* Metric Cards Row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "16px",
-        }}
+    <PageContainer className="flex flex-col gap-6">
+      <motion.div
+        variants={listContainer}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
       >
-        {stats.map((s, idx) => {
-          const Icon = s.icon;
-          return (
-            <div
-              key={idx}
-              className="glass-panel glass-panel-hover"
-              style={{
-                padding: "20px 24px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: 500 }}>
-                  {s.label}
-                </div>
-                <div
-                  style={{
-                    fontSize: "26px",
-                    fontWeight: 700,
-                    color: "var(--text-primary)",
-                    margin: "4px 0",
-                    fontFamily: "var(--font-mono)",
-                  }}
-                >
-                  {s.value}
-                </div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  {s.sub}
-                </div>
-              </div>
-              <div
-                style={{
-                  width: "44px",
-                  height: "44px",
-                  borderRadius: "12px",
-                  backgroundColor: "rgba(255, 255, 255, 0.04)",
-                  border: "1px solid var(--border-subtle)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Icon size={22} color={s.color} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+        {stats.map((s, i) => (
+          <StatCard key={s.label} index={i} {...s} loading={isAnalyticsLoading} />
+        ))}
+      </motion.div>
 
-      {/* Main Grid: Top Matches + Discovery Stream */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.7fr 1fr",
-          gap: "24px",
-        }}
-      >
-        {/* Top Matches Section */}
-        <div
-          className="glass-panel"
-          style={{
-            padding: "24px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Sparkles size={18} color="var(--accent-cyan)" />
-              <h2 style={{ fontSize: "15px", fontWeight: 600 }}>Top Recommended Matches</h2>
-            </div>
-            <button
-              onClick={() => setCurrentTab("jobs")}
-              className="btn btn-ghost"
-              style={{ fontSize: "12px", gap: "4px" }}
-            >
-              <span>View all jobs</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <Panel>
+          <PanelHeader
+            icon={Sparkles}
+            title="Top matches"
+            description="Highest scoring roles against your active resume"
+            action={
+              <Button variant="ghost" size="sm" onClick={() => setCurrentTab("jobs")}>
+                View all
+                <ArrowRight data-icon="inline-end" />
+              </Button>
+            }
+          />
+          <PanelBody className="gap-2">
             {isJobsLoading ? (
-              <div style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)" }}>
-                Loading top matches...
-              </div>
-            ) : topJobs?.jobs && topJobs.jobs.length > 0 ? (
-              topJobs.jobs.map((job: any) => {
-                const matchScore = job.matchScore ?? 0.88;
-                return (
-                  <div
-                    key={job.id}
-                    className="glass-panel glass-panel-hover"
-                    style={{
-                      padding: "16px 20px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "20px",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => setSelectedJobId(job.id)}
-                  >
-                    <ScoreRing score={matchScore} size={48} strokeWidth={4} />
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          fontSize: "14px",
-                          color: "var(--text-primary)",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {job.title}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: "var(--accent-cyan)",
-                          marginTop: "2px",
-                        }}
-                      >
-                        {job.companyName || "Verified Company"}
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          marginTop: "6px",
-                          fontSize: "11px",
-                          color: "var(--text-muted)",
-                        }}
-                      >
-                        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <MapPin size={12} />
-                          {job.location?.city ? `${job.location.city}, ${job.location.country || ""}` : "Remote / Hybrid"}
-                        </span>
-                        {job.ats && <Badge variant="purple">{job.ats.toUpperCase()}</Badge>}
-                      </div>
-                    </div>
-
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: "6px 12px", fontSize: "11px" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedJobId(job.id);
-                      }}
-                    >
-                      Inspect
-                    </button>
-                  </div>
-                );
-              })
-            ) : (
-              <div
-                style={{
-                  padding: "48px 24px",
-                  textAlign: "center",
-                  backgroundColor: "var(--bg-surface)",
-                  borderRadius: "var(--radius-md)",
-                }}
-              >
-                <Layers size={32} color="var(--text-muted)" style={{ margin: "0 auto 12px" }} />
-                <div style={{ fontWeight: 600, color: "var(--text-secondary)" }}>
-                  No matches discovered yet
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Run discovery to scan career pages and fetch verified openings matching your resume.
-                </div>
-                <button
-                  className="btn btn-primary"
-                  style={{ marginTop: "16px" }}
-                  onClick={() => setCurrentTab("discovery")}
-                >
-                  Configure & Start Discovery
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Live Discovery Stream */}
-        <div
-          className="glass-panel"
-          style={{
-            padding: "24px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Clock size={18} color="var(--accent-emerald)" />
-              <h2 style={{ fontSize: "15px", fontWeight: 600 }}>Crawl & Event Stream</h2>
-            </div>
-            <button
-              onClick={() => setCurrentTab("discovery")}
-              className="btn btn-ghost"
-              style={{ fontSize: "11px" }}
-            >
-              Monitor Hub
-            </button>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-              overflowY: "auto",
-              maxHeight: "380px",
-            }}
-          >
-            {crawlEvents && crawlEvents.length > 0 ? (
-              crawlEvents.map((ev: any, i: number) => (
-                <div
-                  key={ev.id || i}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: "var(--radius-sm)",
-                    backgroundColor: "var(--bg-surface)",
-                    border: "1px solid var(--border-subtle)",
-                    fontSize: "12px",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "10px",
-                        color: "var(--accent-cyan)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {ev.type || "CRAWL_EVENT"}
-                    </span>
-                    <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
-                      {ev.createdAt ? new Date(ev.createdAt).toLocaleTimeString() : "Just now"}
-                    </span>
-                  </div>
-                  <div style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
-                    {ev.message || "Discovered new career openings"}
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 rounded-lg border border-border p-4">
+                  <Skeleton className="size-12 rounded-full" />
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-3 w-1/3" />
                   </div>
                 </div>
               ))
+            ) : jobs.length > 0 ? (
+              <motion.ul variants={listContainer} initial="hidden" animate="show" className="flex flex-col gap-2">
+                {jobs.map((job, i) => (
+                  <motion.li key={job.id} variants={listItem} custom={i}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJobId(job.id)}
+                      className="group flex w-full items-center gap-4 rounded-lg border border-border bg-card p-3.5 text-left transition-[border-color,background-color,box-shadow] duration-200 hover:border-[var(--brand-line)] hover:bg-[var(--bg-card-hover)] hover:shadow-[var(--shadow-sm)]"
+                    >
+                      <ScoreRing score={job.matchScore ?? 0} size={46} strokeWidth={4} />
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span className="truncate text-[14px] font-medium text-foreground">{job.title}</span>
+                        <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
+                          <span className="truncate font-medium text-foreground/80">
+                            {job.companyName || job.company?.name || "Unknown company"}
+                          </span>
+                          <span aria-hidden>·</span>
+                          <span className="flex min-w-0 items-center gap-1 truncate">
+                            <MapPin className="size-3 shrink-0" aria-hidden />
+                            <span className="truncate">{jobLocation(job)}</span>
+                          </span>
+                        </div>
+                      </div>
+                      {job.ats && (
+                        <Badge variant="muted" className="hidden capitalize md:inline-flex">
+                          {job.ats}
+                        </Badge>
+                      )}
+                      <ArrowRight
+                        className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary"
+                        aria-hidden
+                      />
+                    </button>
+                  </motion.li>
+                ))}
+              </motion.ul>
             ) : (
-              <div
-                style={{
-                  padding: "24px",
-                  textAlign: "center",
-                  color: "var(--text-muted)",
-                  fontSize: "12px",
-                }}
-              >
-                Waiting for crawler activity...
-              </div>
+              <Empty className="border border-dashed border-border">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Compass />
+                  </EmptyMedia>
+                  <EmptyTitle>No matches yet</EmptyTitle>
+                  <EmptyDescription>
+                    Run discovery to scan career pages and pull in roles that match your resume.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button onClick={() => setCurrentTab("discovery")}>Set up discovery</Button>
+                </EmptyContent>
+              </Empty>
             )}
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
+
+        <Panel>
+          <PanelHeader
+            icon={Activity}
+            title="Crawler activity"
+            description="Live events from the discovery worker"
+            action={
+              <Button variant="ghost" size="sm" onClick={() => setCurrentTab("discovery")}>
+                Open
+                <ArrowRight data-icon="inline-end" />
+              </Button>
+            }
+          />
+          <PanelBody className="pt-3">
+            {isEventsLoading ? (
+              <div className="flex flex-col gap-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex flex-col gap-1.5">
+                    <Skeleton className="h-3 w-1/3" />
+                    <Skeleton className="h-3 w-5/6" />
+                  </div>
+                ))}
+              </div>
+            ) : events.length > 0 ? (
+              <EventTimeline events={events} />
+            ) : (
+              <Empty className="p-6 md:p-8">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Activity />
+                  </EmptyMedia>
+                  <EmptyTitle>Worker idle</EmptyTitle>
+                  <EmptyDescription>Events appear here as soon as a crawl or probe runs.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            )}
+          </PanelBody>
+        </Panel>
       </div>
-    </div>
+    </PageContainer>
   );
 };

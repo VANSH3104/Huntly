@@ -1,5 +1,7 @@
 import React from "react";
-import { Radio, X, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { X, ChevronDown, ExternalLink, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { api, type LiveCrawlEvent } from "../../lib/api";
 
 const MAX_ITEMS = 30;
@@ -142,95 +144,74 @@ export const LiveFeed: React.FC<{
   const running = boardEntries.filter(([, b]) => b.status === "running").length;
 
   return (
-    <section
-      aria-label="Live scraping feed"
-      className="glass-panel"
-      style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: "10px" }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-        <button
-          type="button"
+    <section aria-label="Live scraping feed" className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-[var(--shadow-sm)]">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="btn btn-ghost"
-          style={{ padding: "2px 6px", fontSize: "13px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}
+          aria-controls="live-feed-items"
+          className="-ml-2 font-semibold"
         >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <Radio size={14} color={connected ? "var(--accent-emerald)" : "var(--text-muted)"} />
-          <span>Live scraping</span>
-        </button>
-        <span style={{ fontSize: "12px", color: "var(--text-muted)" }} aria-live="polite">
+          <ChevronDown className={cn("transition-transform", !expanded && "-rotate-90")} data-icon="inline-start" aria-hidden />
+          <span className="relative flex size-2" aria-hidden>
+            {connected && (
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--success)] opacity-60 motion-reduce:animate-none" />
+            )}
+            <span className={cn("relative inline-flex size-2 rounded-full", connected ? "bg-[var(--success)]" : "bg-[var(--border-hover)]")} />
+          </span>
+          Live scraping
+        </Button>
+        <span className="text-xs text-muted-foreground" aria-live="polite">
           {!connected
-            ? "Connecting to live feed…"
+            ? "Connecting to the live feed…"
             : running > 0
               ? `${running} board${running === 1 ? "" : "s"} running · ${totalAdded} added`
               : boardEntries.length
                 ? `Done · ${totalAdded} added`
                 : "Waiting for a scrape to start"}
         </span>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", flex: 1 }}>
+        <ul aria-label="Boards" className="flex flex-1 flex-wrap gap-1.5">
           {boardEntries.map(([board, b]) => (
-            <span
+            <li
               key={board}
               title={b.message}
-              style={{
-                fontSize: "11px",
-                padding: "2px 8px",
-                borderRadius: "var(--radius-full)",
-                border: "1px solid var(--border-subtle)",
-                background: "var(--bg-secondary)",
-                color: b.status === "error" ? "var(--accent-rose)" : b.status === "done" ? "var(--accent-emerald)" : "var(--accent-amber)",
-                fontFamily: "var(--font-mono)",
-                whiteSpace: "nowrap",
-              }}
+              className={cn(
+                "inline-flex h-6 items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 text-[11px] whitespace-nowrap",
+                b.status === "error" ? "text-destructive" : b.status === "done" ? "text-[var(--success)]" : "text-[var(--warning)]"
+              )}
             >
+              {b.status === "running" && <Loader2 className="size-3 animate-spin" aria-hidden />}
               {board} · {b.status} · {b.fetched} fetched · +{b.added}
-            </span>
+            </li>
           ))}
-        </div>
-        <button type="button" className="btn-icon" aria-label="Close live feed" onClick={onClose} style={{ marginLeft: "auto" }}>
-          <X size={14} />
-        </button>
+        </ul>
+        <Button variant="ghost" size="icon-sm" aria-label="Close live feed" onClick={onClose} className="ml-auto">
+          <X />
+        </Button>
       </div>
 
       {expanded && (
-        <ul
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-            maxHeight: "180px",
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: "4px",
-          }}
-        >
+        <ul id="live-feed-items" className="flex max-h-[180px] flex-col gap-1 overflow-y-auto">
           {items.length === 0 ? (
-            <li style={{ fontSize: "12px", color: "var(--text-muted)", padding: "4px 2px" }}>New jobs appear here as they are added.</li>
+            <li className="px-1 py-1 text-xs text-muted-foreground">New jobs appear here as they are added.</li>
           ) : (
             items.map((it) => (
-              <li
-                key={it.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "12px",
-                  padding: "4px 6px",
-                  borderRadius: "var(--radius-sm)",
-                  background: "var(--bg-secondary)",
-                }}
-              >
-                <span style={{ fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {it.title ?? "Untitled role"}
-                </span>
-                <span style={{ color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{it.company}</span>
-                {it.location && <span style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>{it.location}</span>}
-                <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "11px" }}>{it.board}</span>
+              <li key={it.id} className="flex items-center gap-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-xs">
+                <span className="truncate font-medium text-foreground">{it.title ?? "Untitled role"}</span>
+                <span className="whitespace-nowrap text-muted-foreground">{it.company}</span>
+                {it.location && <span className="whitespace-nowrap text-muted-foreground">{it.location}</span>}
+                <span className="ml-auto text-[11px] text-muted-foreground">{it.board}</span>
                 {it.url && (
-                  <a href={it.url} target="_blank" rel="noreferrer" aria-label={`Open ${it.title ?? "job"}`} style={{ color: "var(--accent-indigo)", display: "flex" }}>
-                    <ExternalLink size={12} />
+                  <a
+                    href={it.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open ${it.title ?? "job"}`}
+                    className="inline-flex size-6 items-center justify-center rounded text-primary outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/60"
+                  >
+                    <ExternalLink className="size-3" aria-hidden />
                   </a>
                 )}
               </li>
