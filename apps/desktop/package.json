@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/desktop",
+  "name": "@huntly/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentforge/shared": "workspace:*",
+    "@huntly/shared": "workspace:*",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@radix-ui/react-dialog": "^1.3.1",

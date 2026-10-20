@@ -1,7 +1,7 @@
-import { getDatabase, jobs, resumes, resumeSkills, jobMatches } from "@agentforge/database";
+import { getDatabase, jobs, resumes, resumeSkills, jobMatches } from "@huntly/database";
 import { eq, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import { DEFAULT_MATCH_WEIGHTS, FRESHNESS_THRESHOLDS, SOURCE_AUTHORITY } from "@agentforge/shared";
+import { DEFAULT_MATCH_WEIGHTS, FRESHNESS_THRESHOLDS, SOURCE_AUTHORITY } from "@huntly/shared";
 
 export class JobMatcher {
   private weights = { ...DEFAULT_MATCH_WEIGHTS };

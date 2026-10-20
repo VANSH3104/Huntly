@@ -3,7 +3,7 @@
  * Manages background crawl workers using a SQLite-backed queue.
  */
 
-import { getDatabase, queueJobs, crawlRuns, crawlEvents, sources, companies, resumes, settings } from "@agentforge/database";
+import { getDatabase, queueJobs, crawlRuns, crawlEvents, sources, companies, resumes, settings } from "@huntly/database";
 import { eq, lte, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { createSearchProvider } from "../crawler/search-provider.js";
@@ -378,7 +378,7 @@ export class WorkerOrchestrator {
         try {
           const resp = await fetch(`https://${domain}`, {
             signal: AbortSignal.timeout(10000),
-            headers: { "User-Agent": "AgentForge/1.0 (career discovery bot)" },
+            headers: { "User-Agent": "Huntly/1.0 (career discovery bot)" },
           });
 
           if (resp.ok) {
@@ -483,7 +483,7 @@ export class WorkerOrchestrator {
           try {
             const careerResp = await fetch(careerResult.url, {
               signal: AbortSignal.timeout(12000),
-              headers: { "User-Agent": "AgentForge/1.0" },
+              headers: { "User-Agent": "Huntly/1.0" },
             });
 
             if (careerResp.ok) {

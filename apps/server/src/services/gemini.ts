@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getDatabase, settings } from "@agentforge/database";
+import { getDatabase, settings } from "@huntly/database";
 import { eq } from "drizzle-orm";
 import { latexCompiler } from "./latex-compiler.js";
 

@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase, jobs, companies, sources, resumes } from "@agentforge/database";
+import { getDatabase, jobs, companies, sources, resumes } from "@huntly/database";
 import { eq, or } from "drizzle-orm";
 import { normalizeJobTitle, extractSkillsFromText } from "../utils/normalize.js";
 import { JobMatcher } from "../services/job-matcher.js";

@@ -5,8 +5,8 @@ dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 import express from "express";
 import cors from "cors";
-import { getDatabase } from "@agentforge/database";
-import { runMigrations } from "@agentforge/database";
+import { getDatabase } from "@huntly/database";
+import { runMigrations } from "@huntly/database";
 
 import fs from "node:fs";
 
@@ -101,7 +101,7 @@ async function bootstrap(): Promise<void> {
   void autoApplyQueue.recover();
 
   app.listen(PORT, HOST, () => {
-    console.log(`✓ AgentForge server listening on http://${HOST}:${PORT}`);
+    console.log(`✓ Huntly server listening on http://${HOST}:${PORT}`);
   });
 
   // Graceful shutdown

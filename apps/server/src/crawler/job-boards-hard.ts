@@ -9,7 +9,7 @@
 
 import * as cheerio from "cheerio";
 import zlib from "node:zlib";
-import type { ExperienceLevel } from "@agentforge/shared";
+import type { ExperienceLevel } from "@huntly/shared";
 import type { BoardJob, FetchOpts } from "./job-boards-shared.js";
 // Cyclic (job-boards.ts spreads HARD_BOARDS into its registry); emitLive is only called at run time.
 import { emitLive } from "./job-boards.js";

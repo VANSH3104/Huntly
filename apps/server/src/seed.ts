@@ -1,4 +1,4 @@
-import { getDatabase, runMigrations } from "@agentforge/database";
+import { getDatabase, runMigrations } from "@huntly/database";
 
 /**
  * Seed script — sets up schema without hardcoding companies.

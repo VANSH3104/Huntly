@@ -46,7 +46,7 @@ export class AIIntelScannerService {
 
     for (const ep of endpoints) {
       try {
-        const res = await fetch(ep, { headers: { "User-Agent": "AgentForge-Intel/1.0" } });
+        const res = await fetch(ep, { headers: { "User-Agent": "Huntly-Intel/1.0" } });
         if (!res.ok) continue;
 
         const data = await res.json();

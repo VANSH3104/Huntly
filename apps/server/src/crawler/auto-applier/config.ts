@@ -1,4 +1,4 @@
-import { getDatabase, settings } from "@agentforge/database";
+import { getDatabase, settings } from "@huntly/database";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 

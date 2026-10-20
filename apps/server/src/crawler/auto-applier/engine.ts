@@ -12,7 +12,7 @@ import {
   resumes,
   settings,
   applications,
-} from "@agentforge/database";
+} from "@huntly/database";
 import { detectATS } from "./ats-detector.js";
 import { AppliedIndex } from "./applied-index.js";
 import { getAutoApplyConfig } from "./config.js";
@@ -759,7 +759,7 @@ Reply with ONLY JSON: {"id": "<element id or null>", "reason": "<short reason>"}
     fieldCount: number
   ): Promise<string> {
     const db = getDatabase();
-    const notes = `Auto-applied via AgentForge (${ats.toUpperCase()}). Filled ${fieldCount} fields.`;
+    const notes = `Auto-applied via Huntly (${ats.toUpperCase()}). Filled ${fieldCount} fields.`;
     const [existing] = await db
       .select({ id: applications.id })
       .from(applications)

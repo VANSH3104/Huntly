@@ -73,7 +73,7 @@ export const Sidebar: React.FC = () => {
         <div className="flex items-center gap-2.5">
           <Logo size={30} className="shrink-0 drop-shadow-sm" />
           <div className="flex min-w-0 flex-1 flex-col leading-none group-data-[collapsible=icon]:hidden">
-            <span className="text-[15px] font-semibold tracking-tight text-foreground">AgentForge</span>
+            <span className="text-[15px] font-semibold tracking-tight text-foreground">Huntly</span>
           </div>
           <SidebarTrigger className="group-data-[collapsible=icon]:hidden" />
         </div>

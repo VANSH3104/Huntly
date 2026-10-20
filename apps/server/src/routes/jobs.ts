@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getDatabase, jobs, companies, jobMatches, aiAnalyses, applications, resumes, resumeSkills } from "@agentforge/database";
+import { getDatabase, jobs, companies, jobMatches, aiAnalyses, applications, resumes, resumeSkills } from "@huntly/database";
 import { eq, desc, asc, and, gte, lte, like, inArray, sql, ne, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeLocation } from "../utils/normalize.js";

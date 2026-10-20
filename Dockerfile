@@ -28,7 +28,7 @@ COPY packages/ ./packages/
 COPY apps/ ./apps/
 
 # Build client bundle (Vite)
-RUN pnpm --filter @agentforge/desktop build
+RUN pnpm --filter @huntly/desktop build
 
 # ── Runner Stage ─────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:v1.48.0-noble AS runner
@@ -50,7 +50,7 @@ COPY --from=builder /app ./
 ENV NODE_ENV=production \
     SERVER_HOST=0.0.0.0 \
     SERVER_PORT=7842 \
-    DATABASE_PATH=/app/data/agentforge.db \
+    DATABASE_PATH=/app/data/huntly.db \
     CLIENT_DIST_PATH=/app/apps/desktop/dist \
     PLAYWRIGHT_HEADLESS=true
 
@@ -61,4 +61,4 @@ EXPOSE 7842
 
 VOLUME ["/app/data"]
 
-CMD ["pnpm", "--filter", "@agentforge/server", "start"]
+CMD ["pnpm", "--filter", "@huntly/server", "start"]

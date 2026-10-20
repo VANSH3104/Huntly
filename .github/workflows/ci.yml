@@ -65,6 +65,6 @@ jobs:
         with:
           context: .
           push: false
-          tags: agentforge:test
+          tags: huntly:test
           cache-from: type=gha
           cache-to: type=gha,mode=max

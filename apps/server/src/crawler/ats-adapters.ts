@@ -30,7 +30,7 @@ export class GreenhouseAdapter implements ATSAdapter {
   async discoverJobs(companySlug: string): Promise<ExtractedJob[]> {
     try {
       const resp = await fetch(`https://boards-api.greenhouse.io/v1/boards/${companySlug}/jobs?content=true`, {
-        headers: { "User-Agent": "AgentForge/1.0" },
+        headers: { "User-Agent": "Huntly/1.0" },
         signal: AbortSignal.timeout(10000),
       });
 

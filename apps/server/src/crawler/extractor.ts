@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { normalizeLocation, normalizeJobTitle, normalizeUrl, extractDomain } from "../utils/normalize.js";
 import { detectATS } from "./career-discovery.js";
-import type { Job, JobLocation } from "@agentforge/shared";
+import type { Job, JobLocation } from "@huntly/shared";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "node:crypto";
 

@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/server",
+  "name": "@huntly/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentforge/database": "workspace:*",
-    "@agentforge/shared": "workspace:*",
+    "@huntly/database": "workspace:*",
+    "@huntly/shared": "workspace:*",
     "@google/generative-ai": "^0.21.0",
     "better-sqlite3": "^12.0.0",
     "cheerio": "^1.0.0",

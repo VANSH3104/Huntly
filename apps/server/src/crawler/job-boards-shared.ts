@@ -2,7 +2,7 @@
  * Types and helpers shared by the board fetchers in job-boards.ts and job-boards-extra.ts.
  */
 
-import type { ExperienceLevel } from "@agentforge/shared";
+import type { ExperienceLevel } from "@huntly/shared";
 
 export interface BoardJob {
   board: string;
@@ -44,7 +44,7 @@ export function boardEnabled(source: BoardSource): boolean {
 
 // ─── HTTP ───────────────────────────────────────────────────────
 
-export const UA = "Mozilla/5.0 (compatible; AgentForge/1.0; +https://github.com/agentforge)";
+export const UA = "Mozilla/5.0 (compatible; Huntly/1.0; +https://github.com/huntly)";
 const TIMEOUT_MS = 20_000;
 export const SWEEP_CONCURRENCY = 8;
 

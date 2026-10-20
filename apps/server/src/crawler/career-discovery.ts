@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { CAREER_PATH_CANDIDATES } from "@agentforge/shared";
+import { CAREER_PATH_CANDIDATES } from "@huntly/shared";
 
 export interface CareerPageResult {
   url: string;
@@ -135,7 +135,7 @@ export class CareerPageDiscoverer {
         method: "HEAD",
         signal: AbortSignal.timeout(5000),
         redirect: "follow",
-        headers: { "User-Agent": "AgentForge/1.0 (career page discovery)" },
+        headers: { "User-Agent": "Huntly/1.0 (career page discovery)" },
       });
 
       if (resp.ok) {

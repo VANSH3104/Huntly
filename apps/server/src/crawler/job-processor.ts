@@ -1,4 +1,4 @@
-import { getDatabase, jobs, jobSkills, jobMatches, jobSnapshots, companies, sources, crawlEvents } from "@agentforge/database";
+import { getDatabase, jobs, jobSkills, jobMatches, jobSnapshots, companies, sources, crawlEvents } from "@huntly/database";
 import { eq, and, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type { ExtractedJob } from "./extractor.js";

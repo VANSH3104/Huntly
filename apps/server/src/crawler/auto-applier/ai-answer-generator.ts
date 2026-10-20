@@ -1,5 +1,5 @@
 import { GeminiClient } from "../../services/gemini.js";
-import { getDatabase, settings } from "@agentforge/database";
+import { getDatabase, settings } from "@huntly/database";
 import { eq } from "drizzle-orm";
 import type { ApplicantProfile } from "./types.js";
 

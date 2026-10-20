@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getDatabase, jobs, resumes, aiAnalyses, jobMatches, companies } from "@agentforge/database";
+import { getDatabase, jobs, resumes, aiAnalyses, jobMatches, companies } from "@huntly/database";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";

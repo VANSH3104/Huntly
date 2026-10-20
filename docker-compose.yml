@@ -1,9 +1,9 @@
 services:
-  agentforge:
+  huntly:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: agentforge
+    container_name: huntly
     restart: unless-stopped
     ports:
       # Access the application at http://localhost:1420
@@ -11,7 +11,7 @@ services:
     environment:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=7842
-      - DATABASE_PATH=/app/data/agentforge.db
+      - DATABASE_PATH=/app/data/huntly.db
       - CLIENT_DIST_PATH=/app/apps/desktop/dist
       - PLAYWRIGHT_HEADLESS=${PLAYWRIGHT_HEADLESS:-true}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
@@ -24,11 +24,11 @@ services:
       - CRAWLER_REQUEST_DELAY_MS=${CRAWLER_REQUEST_DELAY_MS:-1000}
       - CRAWLER_TIMEOUT_MS=${CRAWLER_TIMEOUT_MS:-15000}
     volumes:
-      - agentforge-data:/app/data
+      - huntly-data:/app/data
     env_file:
       - path: .env
         required: false
 
 volumes:
-  agentforge-data:
-    name: agentforge_data
+  huntly-data:
+    name: huntly_data

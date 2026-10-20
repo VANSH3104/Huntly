@@ -5,7 +5,7 @@ import { getUploadedResume, saveUploadedResume, deleteUploadedResume } from "../
 import { autoApplyQueue } from "../crawler/auto-applier/queue.js";
 import { connectLinkedIn, isConnectingLinkedIn } from "../crawler/auto-applier/linkedin.js";
 import { AutoApplyConfigSchema, getAutoApplyConfig, saveAutoApplyConfig } from "../crawler/auto-applier/config.js";
-import { getDatabase, settings, applications, jobs } from "@agentforge/database";
+import { getDatabase, settings, applications, jobs } from "@huntly/database";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import path from "node:path";

@@ -845,7 +845,7 @@ async function fetchCareerjet({ keywords, limit }: FetchOpts): Promise<BoardJob[
   return fetchPages("careerjet", pagesFor(limit, 50, 3), 2, async page => {
     const params = new URLSearchParams({
       affid: env("CAREERJET_AFFID"), locale_code: env("CAREERJET_LOCALE") || "en_IN", keywords: (keywords ?? "").replace(/,/g, " "),
-      pagesize: "50", page: String(page), user_ip: "127.0.0.1", user_agent: "AgentForge/1.0", url: "http://localhost/",
+      pagesize: "50", page: String(page), user_ip: "127.0.0.1", user_agent: "Huntly/1.0", url: "http://localhost/",
     });
     const data = await getJson<Resp>(`http://public.api.careerjet.net/search?${params}`);
     return (data.jobs ?? []).map(j => {

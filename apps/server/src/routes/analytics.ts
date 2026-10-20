@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getDatabase, jobs, applications, companies, jobMatches, jobSkills } from "@agentforge/database";
+import { getDatabase, jobs, applications, companies, jobMatches, jobSkills } from "@huntly/database";
 import { sql, eq, gte, and, desc } from "drizzle-orm";
 
 export const analyticsRouter = Router();

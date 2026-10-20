@@ -13,7 +13,7 @@ export const THEMES = [
 export type ThemeId = (typeof THEMES)[number]["id"];
 
 const DEFAULT_THEME: ThemeId = "soft-sand";
-const THEME_KEY = "agentforge-theme";
+const THEME_KEY = "huntly-theme";
 
 export const isThemeId = (v: unknown): v is ThemeId => THEMES.some((t) => t.id === v);
 export const isDarkTheme = (id: ThemeId) => THEMES.find((t) => t.id === id)?.dark ?? false;
@@ -123,12 +123,12 @@ const defaultFilters: JobFilterState = {
   advanced: defaultAdvancedFilters,
 };
 
-const FILTERS_STORAGE_KEY = "agentforge-job-filters";
+const FILTERS_STORAGE_KEY = "huntly-job-filters";
 
 // Merges over defaults so filters saved by an older build still get new fields.
 function loadFilters(): JobFilterState {
   try {
-    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY) ?? localStorage.getItem("agentforge-job-filters");
     if (!raw) return defaultFilters;
     const saved = JSON.parse(raw) as Partial<JobFilterState>;
     return { ...defaultFilters, ...saved, advanced: { ...defaultAdvancedFilters, ...saved.advanced } };

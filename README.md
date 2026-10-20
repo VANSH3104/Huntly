@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="AgentForge" width="100%" />
+  <img src="docs/assets/banner.svg" alt="Huntly" width="100%" />
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshot-overview.png" alt="AgentForge overview" width="100%" />
+  <img src="docs/assets/screenshot-overview.png" alt="Huntly overview" width="100%" />
 </p>
 
 <p align="center">
@@ -24,9 +24,9 @@
   <img src="docs/assets/screenshot-dark.png" alt="Graphite dark theme" width="49%" />
 </p>
 
-## Why AgentForge
+## Why Huntly
 
-Job boards show you everything and rank nothing for you. AgentForge runs on your machine, reads the sources you care about, and scores each role against your own resume. Your resume, API keys and application history never leave your computer, apart from the LLM calls you configure.
+Job boards show you everything and rank nothing for you. Huntly runs on your machine, reads the sources you care about, and scores each role against your own resume. Your resume, API keys and application history never leave your computer, apart from the LLM calls you configure.
 
 ## Features
 
@@ -46,8 +46,8 @@ Job boards show you everything and rank nothing for you. AgentForge runs on your
 You need Node 20 or newer and pnpm 9 or newer.
 
 ```bash
-git clone <your-fork-url> agentforge
-cd agentforge
+git clone <your-fork-url> huntly
+cd huntly
 pnpm install
 
 cp .env.example .env        # add GEMINI_API_KEY and one search provider key
@@ -65,14 +65,14 @@ npx playwright install chromium   # crawling and auto-apply
 
 ### Option B: Docker Compose
 
-Run AgentForge with pre-configured Playwright Chromium, SQLite, and Node runtime in a single command:
+Run Huntly with pre-configured Playwright Chromium, SQLite, and Node runtime in a single command:
 
 ```bash
 cp .env.example .env        # add GEMINI_API_KEY and one search provider key
 docker compose up -d
 ```
 
-Open <http://localhost:1420>. Your SQLite database, uploaded resumes, and auto-apply state are persisted in the `agentforge-data` volume.
+Open <http://localhost:1420>. Your SQLite database, uploaded resumes, and auto-apply state are persisted in the `huntly-data` volume.
 
 ## Configuration
 

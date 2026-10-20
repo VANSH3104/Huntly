@@ -9,7 +9,7 @@ Requirements: Node >= 20 (works on 24), pnpm >= 9.
 ```bash
 pnpm install
 cp .env.example .env     # then fill GEMINI_API_KEY and a search provider key
-pnpm db:migrate          # creates agentforge.db (path from DATABASE_PATH)
+pnpm db:migrate          # creates huntly.db (path from DATABASE_PATH)
 pnpm dev:all             # server (7842) + UI (1420)
 ```
 
@@ -21,7 +21,7 @@ Open http://localhost:1420. Optional: `pnpm seed` for demo data; `npx playwright
 |---|---|
 | Server only | `pnpm dev:server` |
 | UI only | `pnpm dev` |
-| Typecheck | `pnpm --filter @agentforge/server typecheck` and `pnpm --filter @agentforge/desktop typecheck` |
+| Typecheck | `pnpm --filter @huntly/server typecheck` and `pnpm --filter @huntly/desktop typecheck` |
 | Build all | `pnpm build:all` |
 | DB schema → SQL | `pnpm db:generate`, `pnpm db:migrate`, `pnpm db:studio` |
 

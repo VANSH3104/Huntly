@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/database",
+  "name": "@huntly/database",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@agentforge/shared": "workspace:*",
+    "@huntly/shared": "workspace:*",
     "better-sqlite3": "^12.0.0",
     "drizzle-orm": "^0.33.0"
   },

@@ -1,4 +1,4 @@
-import { getDatabase, applications, applyQueue, jobs } from "@agentforge/database";
+import { getDatabase, applications, applyQueue, jobs } from "@huntly/database";
 import { eq, ne, or } from "drizzle-orm";
 
 export interface JobIdentity {

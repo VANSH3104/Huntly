@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve AgentForge.
+Thanks for helping improve Huntly.
 
 ## Setup
 

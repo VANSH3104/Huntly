@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getDatabase, notifications } from "@agentforge/database";
+import { getDatabase, notifications } from "@huntly/database";
 import { eq, desc } from "drizzle-orm";
 
 export const notificationsRouter = Router();

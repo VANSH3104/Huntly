@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
-import { getDatabase, applyQueue, applications, companies, jobs } from "@agentforge/database";
+import { getDatabase, applyQueue, applications, companies, jobs } from "@huntly/database";
 import { defaultAutoApplier } from "./engine.js";
 import { AppliedIndex } from "./applied-index.js";
 import { getAutoApplyConfig } from "./config.js";

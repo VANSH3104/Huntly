@@ -377,7 +377,7 @@ export class PlaywrightCrawler {
         method: endpoint.method,
         headers: {
           "Accept": "application/json",
-          "User-Agent": "AgentForge/1.0",
+          "User-Agent": "Huntly/1.0",
         },
         signal: AbortSignal.timeout(10_000),
       });

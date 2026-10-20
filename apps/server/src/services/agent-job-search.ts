@@ -1,4 +1,4 @@
-import { getDatabase, jobs, companies, resumes } from "@agentforge/database";
+import { getDatabase, jobs, companies, resumes } from "@huntly/database";
 import { eq, ne, sql, desc, and } from "drizzle-orm";
 import { GeminiClient } from "./gemini.js";
 import { SerperSearchProvider, SearchResult } from "../crawler/search-provider.js";

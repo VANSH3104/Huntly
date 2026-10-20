@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
-import { getDatabase, jobs, companies, sources, resumes } from "@agentforge/database";
+import { getDatabase, jobs, companies, sources, resumes } from "@huntly/database";
 import { eq, or } from "drizzle-orm";
 import { normalizeJobTitle, extractSkillsFromText } from "../utils/normalize.js";
 import { JobMatcher } from "../services/job-matcher.js";
@@ -283,7 +283,7 @@ export class SocialAndYCScraper {
       // 1. Search Hacker News Algolia API for the most recent "Ask HN: Who is hiring?" thread
       const searchUrl = `https://hn.algolia.com/api/v1/search?tags=story,author_whoishiring&query=Ask+HN:+Who+is+hiring&hitsPerPage=2`;
       const threadRes = await fetch(searchUrl, {
-        headers: { "User-Agent": "AgentForge/1.0" },
+        headers: { "User-Agent": "Huntly/1.0" },
       });
 
       if (!threadRes.ok) return [];
@@ -296,7 +296,7 @@ export class SocialAndYCScraper {
       // 2. Fetch top hiring comments in this story
       const commentsUrl = `https://hn.algolia.com/api/v1/search?tags=comment,story_${storyId}&hitsPerPage=60`;
       const commentsRes = await fetch(commentsUrl, {
-        headers: { "User-Agent": "AgentForge/1.0" },
+        headers: { "User-Agent": "Huntly/1.0" },
       });
 
       if (!commentsRes.ok) return [];

@@ -10,7 +10,12 @@ let _sqlite: Database.Database | null = null;
 export function getDatabase(dbPath?: string): ReturnType<typeof drizzle<typeof schema>> {
   if (_db) return _db;
 
-  const resolvedPath = dbPath ?? process.env["DATABASE_PATH"] ?? "./agentforge.db";
+  const defaultDbPath = fs.existsSync("./huntly.db")
+    ? "./huntly.db"
+    : fs.existsSync("./agentforge.db")
+    ? "./agentforge.db"
+    : "./huntly.db";
+  const resolvedPath = dbPath ?? process.env["DATABASE_PATH"] ?? defaultDbPath;
   const absolutePath = path.resolve(resolvedPath);
   const dir = path.dirname(absolutePath);
 

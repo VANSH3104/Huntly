@@ -1,4 +1,4 @@
-# AgentForge — Feature & File Summary
+# Huntly — Feature & File Summary
 
 AI-powered Job Intelligence OS. pnpm monorepo: Express + SQLite (Drizzle) backend, React + Vite frontend, Gemini for AI, Playwright for crawling. Give this file to an AI along with `AGENT.md` when asking it to design a new feature.
 

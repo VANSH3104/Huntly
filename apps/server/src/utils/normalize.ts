@@ -1,5 +1,5 @@
-import { CITY_ALIASES, SKILL_CANONICAL, INDIA_STATES } from "@agentforge/shared";
-import type { JobLocation } from "@agentforge/shared";
+import { CITY_ALIASES, SKILL_CANONICAL, INDIA_STATES } from "@huntly/shared";
+import type { JobLocation } from "@huntly/shared";
 
 // ─── Location Normalization ─────────────────────────────────────
 

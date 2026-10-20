@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { getDatabase, settings } from "@agentforge/database";
+import { getDatabase, settings } from "@huntly/database";
 import { eq } from "drizzle-orm";
-import { DEFAULT_SETTINGS, UserSettingsSchema } from "@agentforge/shared";
+import { DEFAULT_SETTINGS, UserSettingsSchema } from "@huntly/shared";
 
 export const settingsRouter = Router();
 

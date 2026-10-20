@@ -1,4 +1,4 @@
-import type { ParsedResume } from "@agentforge/shared";
+import type { ParsedResume } from "@huntly/shared";
 
 /**
  * Parses a LaTeX resume into a structured ParsedResume object.

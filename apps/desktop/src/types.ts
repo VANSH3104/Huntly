@@ -8,7 +8,7 @@ import type {
   CrawlRun,
   CrawlEvent,
   ParsedResume,
-} from "@agentforge/shared";
+} from "@huntly/shared";
 
 export type NavTab =
   | "dashboard"
