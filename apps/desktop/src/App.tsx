@@ -1,12 +1,17 @@
-import React from "react";
+import { MotionConfig } from "framer-motion";
+import { Bell, Database } from "lucide-react";
 import { useStore } from "./store/useStore";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { CommandPalette } from "./components/common/CommandPalette";
+import { ConfirmHost } from "./components/common/ConfirmHost";
 import { JobDetailModal } from "./views/JobDetailModal";
 import { AutoApplyDock } from "./components/autoapply/AutoApplyDock";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Toaster } from "@/components/ui/sonner";
+import type { NavTab } from "./types";
 
-// Views
 import { DashboardView } from "./views/DashboardView";
 import { JobsView } from "./views/JobsView";
 import { TechRadarView } from "./views/TechRadarView";
@@ -14,108 +19,63 @@ import { DiscoveryView } from "./views/DiscoveryView";
 import { ApplicationsView } from "./views/ApplicationsView";
 import { ResumeStudioView } from "./views/ResumeStudioView";
 import { AnalyticsView } from "./views/AnalyticsView";
-import { SandboxView } from "./views/SandboxView";
 import { SettingsView } from "./views/SettingsView";
+
+const VIEWS: Record<NavTab, React.ComponentType> = {
+  dashboard: DashboardView,
+  jobs: JobsView,
+  radar: TechRadarView,
+  discovery: DiscoveryView,
+  applications: ApplicationsView,
+  resume: ResumeStudioView,
+  analytics: AnalyticsView,
+  settings: SettingsView,
+};
 
 export const App: React.FC = () => {
   const { currentTab, isNotificationPanelOpen, setIsNotificationPanelOpen } = useStore();
-
-  const renderActiveView = () => {
-    switch (currentTab) {
-      case "dashboard":
-        return <DashboardView />;
-      case "jobs":
-        return <JobsView />;
-      case "radar":
-        return <TechRadarView />;
-      case "discovery":
-        return <DiscoveryView />;
-      case "applications":
-        return <ApplicationsView />;
-      case "resume":
-        return <ResumeStudioView />;
-      case "analytics":
-        return <AnalyticsView />;
-      case "sandbox":
-        return <SandboxView />;
-      case "settings":
-        return <SettingsView />;
-      default:
-        return <DashboardView />;
-    }
-  };
+  const View = VIEWS[currentTab] ?? DashboardView;
 
   return (
-    <div className="app-container">
-      {/* Navigation Sidebar */}
-      <Sidebar />
-
-      {/* Main Content Area */}
-      <main className="main-content">
-        <Header />
-        {renderActiveView()}
-      </main>
-
-      {/* Overlays & Modals */}
-      <CommandPalette />
-      <JobDetailModal />
-      <AutoApplyDock />
-
-      {/* Notifications Drawer */}
-      {isNotificationPanelOpen && (
-        <div
-          style={{
-            position: "fixed",
-            top: "56px",
-            right: 0,
-            bottom: 0,
-            width: "360px",
-            backgroundColor: "var(--bg-card)",
-            backdropFilter: "blur(16px)",
-            borderLeft: "1px solid var(--border-subtle)",
-            boxShadow: "var(--shadow-lg)",
-            zIndex: 100,
-            display: "flex",
-            flexDirection: "column",
-            padding: "20px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "16px",
-            }}
-          >
-            <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>System Notifications</h3>
-            <button
-              className="btn btn-ghost"
-              style={{ fontSize: "12px" }}
-              onClick={() => setIsNotificationPanelOpen(false)}
-            >
-              Close
-            </button>
+    <MotionConfig reducedMotion="user">
+      <SidebarProvider style={{ "--sidebar-width": "15rem" } as React.CSSProperties} className="app-container">
+        <Sidebar />
+        <SidebarInset className="main-content">
+          <Header />
+          <div key={currentTab} className="page-view animate-in fade-in-50 duration-150">
+            <View />
           </div>
+        </SidebarInset>
 
-          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px" }}>
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "var(--bg-surface)",
-                border: "1px solid var(--border-subtle)",
-                fontSize: "12px",
-              }}
-            >
-              <div style={{ color: "var(--accent-indigo)", fontWeight: 600 }}>Crawl Engine Initialized</div>
-              <div style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
-                Connected to local SQLite database with 14 active ATS adapters and query generators ready.
+        <CommandPalette />
+        <JobDetailModal />
+        <AutoApplyDock />
+        <ConfirmHost />
+        <Toaster position="bottom-right" />
+
+        <Sheet open={isNotificationPanelOpen} onOpenChange={setIsNotificationPanelOpen}>
+          <SheetContent className="w-[380px] sm:max-w-[380px]">
+            <SheetHeader>
+              <SheetTitle>Notifications</SheetTitle>
+              <SheetDescription>Events from your crawl engine and agents.</SheetDescription>
+            </SheetHeader>
+            <div className="flex flex-col gap-2.5 px-4">
+              <div className="flex gap-3 rounded-lg border border-border bg-card p-3 text-[12.5px]">
+                <Database className="mt-0.5 size-4 shrink-0 text-primary" />
+                <div>
+                  <div className="font-medium text-foreground">Crawl engine initialized</div>
+                  <div className="mt-0.5 text-muted-foreground">
+                    Connected to the local SQLite database with ATS adapters and query generators ready.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground">
+                <Bell className="size-3.5" /> You are all caught up.
               </div>
             </div>
-          </div>
-        </div>
-      )}
-    </div>
+          </SheetContent>
+        </Sheet>
+      </SidebarProvider>
+    </MotionConfig>
   );
 };
