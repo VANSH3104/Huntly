@@ -8,11 +8,10 @@ Paths are relative to the repo root. Frontend = `apps/desktop/src`, backend = `a
 
 | Path | Role |
 |---|---|
-| `apps/server` | Express API (port 7842), crawlers, AI services, sandbox, auto-applier |
+| `apps/server` | Express API (port 7842), crawlers, AI services, auto-applier |
 | `apps/desktop` | React 18 + Vite UI (port 1420, proxies `/api` to 7842) |
 | `packages/database` | Drizzle schema (`src/schema.ts`), client, migrate script |
 | `packages/shared` | Shared types, zod schemas, constants (match weights, ATS names) |
-| `seed_freehire_*.cjs` | One-off scripts that seed the Freehire job board into `agentforge.db` |
 
 Frontend navigation is a Zustand tab (`store/useStore.ts` → `currentTab`), switched in `App.tsx`. No router.
 
@@ -29,17 +28,12 @@ Browse crawled jobs with filters, match scores, closed/already-applied exclusion
 - Logic: `services/job-matcher.ts` (weighted score using `DEFAULT_MATCH_WEIGHTS` in `packages/shared/src/constants`), `utils/normalize.ts`
 - Tables: `jobs`, `job_skills`, `job_matches`, `job_snapshots`
 
-### 3. Freehire board
-Curated job board with advanced filters (region, work format, grade, employment type).
-- UI: `components/freehire/{FreehireView,FreehireJobCard,FreehireJobDetailModal,AllFiltersModal,LocationFormatPopover}.tsx`
-- Data: seeded by `seed_freehire_jobs.cjs`, `seed_freehire_all_sources.cjs`
-
-### 4. Agent job search (AI)
+### 3. Agent job search (AI)
 Natural-language job search; AI expands filters then searches.
 - API: `routes/ai.ts` (`POST /api/ai/expand-filters`, `POST /api/ai/agent-search`)
 - Logic: `services/agent-job-search.ts`
 
-### 5. Discovery & crawling
+### 4. Discovery & crawling
 Find companies/jobs from the web and ATS APIs; live progress over SSE.
 - UI: `views/DiscoveryView.tsx`
 - API: `routes/crawl.ts` — `/runs`, `/events`, `/events/stream` (SSE), `/stats`, `/start`, `/linkedin`, `/twitter`, `/yc`, `/hn`, `/discover`, `/career-page`, `/deep-search`, `/probe`
@@ -53,13 +47,13 @@ Find companies/jobs from the web and ATS APIs; live progress over SSE.
   - Persistence/health: `job-processor.ts` (dedupe, close detection), `endpoint-store.ts` (learned API endpoints → `endpoint-store.json`), `source-health.ts`
 - Tables: `companies`, `sources`, `crawl_runs`, `crawl_events`, `crawl_errors`, `queue_jobs`
 
-### 6. Applications tracker
+### 5. Applications tracker
 Kanban/board of applications by status.
 - UI: `views/ApplicationsView.tsx`
 - API: `routes/applications.ts` (`GET /`, `GET /board`, `POST /`, `PATCH /:id`)
 - Table: `applications`
 
-### 7. Auto-apply (Autopilot)
+### 6. Auto-apply (Autopilot)
 Filter jobs, click "Auto-Apply all (N)", and a background queue applies to each one in a Playwright browser. A job is marked applied only after the site shows a confirmation, and is never applied to twice.
 - UI: `components/autoapply/AutoApplyLauncher.tsx` (start dialog, one-time profile + resume PDF setup), `components/autoapply/AutoApplyDock.tsx` (floating live queue, mounted in `App.tsx`; retry, answer missing fields, mark applied), `components/AutoApplyModal.tsx` (single-job flow from the job detail), button in `views/JobsView.tsx`; board badge in `views/ApplicationsView.tsx`
 - API: `routes/auto-apply.ts` — `/queue` (GET list, POST enqueue), `/queue/preview`, `/queue/pause|resume|cancel-queued|clear-failed`, `/queue/:id/retry|mark-applied`, `DELETE /queue/:id`, `/config` (GET/PUT), `/readiness`, `/resume-pdf` (POST raw PDF, DELETE), plus `/profile`, `/memory`, `/` (single run), `/confirm`, `/batch` (alias of enqueue), `/screenshot/:filename`
@@ -69,45 +63,39 @@ Filter jobs, click "Auto-Apply all (N)", and a background queue applies to each 
 - Models: `services/gemini.ts` fails over between Gemini models on quota errors.
 - Tables: `apply_queue` (UNIQUE job_id), `applications` (UNIQUE job_id)
 
-### 8. Resume Studio
+### 7. Resume Studio
 Upload LaTeX resumes, parse, tailor to a job with AI, compile to PDF, generate cover letters and outreach drafts.
 - UI: `views/ResumeStudioView.tsx`
 - API: `routes/resumes.ts` (list, active, upload, delete, activate, download-active, compile); `routes/ai.ts` (`/analyze`, `/tailor-resume`, `/download-pdf`, `/compile-resume`, `/generate-cover-letter`, `/outreach-draft`)
 - Logic: `services/resume-parser.ts` (regex LaTeX parser), `services/latex-compiler.ts`; LaTeX packages in `apps/server/assets/tex/`
 - Tables: `resumes`, `resume_skills`, `ai_analyses`
 
-### 9. Tech Radar
+### 8. Tech Radar
 AI-scanned news/trend feed with featured breaking-news scroller; cards link straight to sources (no deep-dive modal in the UI).
 - UI: `views/TechRadarView.tsx`
 - API: `routes/intel.ts` (`GET /feed`, `POST /refresh`, `POST /deep-dive`)
 - Logic: `services/ai-intel-scanner.ts`
 
-### 10. Analytics
+### 9. Analytics
 - UI: `views/AnalyticsView.tsx`
 - API: `routes/analytics.ts` (`/overview`, `/skills`, `/companies`, `/applications/timeline`)
 
-### 11. Sandbox
-Isolated workspaces: run commands, read/write files, plus a controllable embedded browser.
-- UI: `views/SandboxView.tsx`, `components/SandboxBrowserDialog.tsx`
-- API: `routes/sandbox.ts` — `/health`, sandbox CRUD, `/:id/commands`, `/:id/files`, `/:id/files/list`, `/browser/{status,navigate,click,type,scroll,back,forward,reload,close}`
-- Logic: `sandbox/manager.ts`, `sandbox/browser-service.ts`, `sandbox/security.ts` (path-escape guard, sanitized env), `sandbox/types.ts` (zod schemas)
-
-### 12. Settings, LLM config, notifications
+### 10. Settings, LLM config, notifications
 - UI: `views/SettingsView.tsx`, `components/layout/Header.tsx` (notifications drawer)
 - API: `routes/settings.ts` (`/`, `/gemini-key`, `/llm`, `/test-llm`), `routes/notifications.ts`
 - Logic: `services/gemini.ts` (`GeminiClient`, exported as `LLMClient`)
 - Tables: `settings`, `notifications`, `users`
 
-### 13. App shell
-- `App.tsx`, `main.tsx`, `index.css` (design tokens as CSS variables, glass-card style)
-- `components/layout/{Sidebar,Header}.tsx`, `components/common/CommandPalette.tsx` (cmdk, Ctrl+K)
+### 11. App shell
+- `App.tsx`, `main.tsx`, `index.css` (design tokens as CSS variables mapped onto shadcn semantic colors, paper grain, motion)
+- `components/layout/{Sidebar,Header}.tsx` (shadcn Sidebar, theme picker, notifications sheet), `components/common/{CommandPalette,ConfirmHost,Logo}.tsx`, `components/ui/` (shadcn), `lib/notify.ts` (toast + confirmDialog)
 - `lib/api.ts` (fetch client), `store/useStore.ts` (Zustand), `types.ts`
 
 ## Database tables (`packages/database/src/schema.ts`)
 `users`, `resumes`, `resume_skills`, `companies`, `sources`, `jobs`, `job_snapshots`, `job_skills`, `job_matches`, `ai_analyses`, `applications`, `apply_queue`, `crawl_runs`, `crawl_events`, `crawl_errors`, `queue_jobs`, `notifications`, `settings`.
 
 ## API mounts (`apps/server/src/index.ts`)
-`/health`, `/api/{jobs,companies,sources,resumes,applications,crawl,analytics,settings,notifications,ai,intel,sandbox,auto-apply}`
+`/health`, `/api/{jobs,companies,sources,resumes,applications,crawl,analytics,settings,notifications,ai,intel,auto-apply}`
 
 ## Environment (`.env`)
 `GEMINI_API_KEY`, `GEMINI_MODEL`, `SEARCH_PROVIDER` (+ `SERPER_API_KEY` / `SERPAPI_KEY` / `BRAVE_SEARCH_API_KEY`), `DATABASE_PATH`, `SERVER_PORT`, `SERVER_HOST`, `CRAWLER_CONCURRENCY`, `CRAWLER_REQUEST_DELAY_MS`, `CRAWLER_TIMEOUT_MS`, `PLAYWRIGHT_HEADLESS`.

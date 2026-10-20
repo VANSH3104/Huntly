@@ -13,7 +13,7 @@ pnpm db:migrate          # creates agentforge.db (path from DATABASE_PATH)
 pnpm dev:all             # server (7842) + UI (1420)
 ```
 
-Open http://localhost:1420. Optional: `pnpm seed` for demo data; `npx playwright install chromium` for crawling, auto-apply and the sandbox browser.
+Open http://localhost:1420. Optional: `pnpm seed` for demo data; `npx playwright install chromium` for crawling, auto-apply and.
 
 ## Commands
 
@@ -33,7 +33,7 @@ There is no test suite or linter configured yet. Typecheck is the verification g
 - Backend: one Express router per domain in `routes/`, mounted under `/api/<name>` in `index.ts`. Validate input with zod; shared schemas go in `packages/shared`. Keep routes thin, put logic in `services/` or `crawler/`.
 - DB: Drizzle + better-sqlite3 (synchronous). Change `schema.ts`, then generate and migrate. Never hand-edit the `.db` file.
 - AI: all Gemini calls go through `services/gemini.ts` (`LLMClient`). Don't instantiate the SDK elsewhere.
-- Frontend: function components + hooks, TanStack Query for server data, Zustand for UI state, no router (tab switch in `App.tsx`). Styling uses CSS variables from `index.css` (`var(--bg-card)`, `var(--border-subtle)`, …) and mostly inline styles; reuse the existing design tokens and glass-card look so new views match.
+- Frontend: function components + hooks, TanStack Query for server data, Zustand for UI state, no router (tab switch in `App.tsx`). UI is shadcn/ui (`components/ui`, add with `npx shadcn@latest add`) on Tailwind v4. Colors come only from the tokens in `index.css`; never hardcode hex. Use `toast` / `confirmDialog` from `@/lib/notify` instead of `alert()` / `confirm()`.
 - Match the surrounding file's style, comment density and naming. Don't add dependencies without need.
 
 ## Rules and gotchas
@@ -41,10 +41,9 @@ There is no test suite or linter configured yet. Typecheck is the verification g
 - Never commit `.env`, `*.db`, or API keys. `.env` is gitignored; edit `.env.example` for new variables.
 - `better-sqlite3` must be v12+ for Node 24 (v11 has no prebuilt binary and the machine has no C++ toolchain).
 - Crawler etiquette: respect `CRAWLER_CONCURRENCY` / `CRAWLER_REQUEST_DELAY_MS`; prefer ATS APIs (`ats-adapters.ts`) over HTML scraping.
-- Sandbox: any file path from a request must go through `sandbox/security.ts#resolveSafePath`; commands run with `getSanitizedEnv`. Do not weaken these.
 - Auto-apply must stay human-in-the-loop: it fills the form and waits for `/confirm` before submitting. Don't add silent submission.
 - Auto-generated screenshots/artifacts and `endpoint-store.json` are runtime output, not source.
-- Large files to be careful with (edit narrowly, don't rewrite): `views/JobsView.tsx` (~2k lines), `components/freehire/AllFiltersModal.tsx`, `components/AutoApplyModal.tsx`.
+- Large files to be careful with (edit narrowly, don't rewrite): `views/JobsView.tsx` (~2k lines), `components/AutoApplyModal.tsx`.
 
 ## Workflow for a new feature
 
