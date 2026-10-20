@@ -1,27 +1,35 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { SiGithub, SiHuggingface, SiYcombinator } from "react-icons/si";
+import {
+  ArrowUp,
+  ArrowUpRight,
+  Bot,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Code2,
+  Lightbulb,
+  List,
+  MessagesSquare,
+  Newspaper,
+  RefreshCw,
+  ScrollText,
+  Search,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import { api } from "../lib/api";
-import {
-  SiYcombinator,
-  SiGithub,
-  SiHuggingface,
-  SiArxiv,
-} from "react-icons/si";
-import {
-  HiSparkles,
-  HiFire,
-  HiBolt,
-  HiOutlineArrowTopRightOnSquare,
-  HiOutlineLightBulb,
-  HiOutlineCodeBracket,
-  HiOutlineArrowPath,
-  HiOutlineMagnifyingGlass,
-  HiOutlineChatBubbleLeftRight,
-  HiOutlineClock,
-  HiOutlineChevronLeft,
-  HiOutlineChevronRight,
-  HiOutlineQueueList,
-} from "react-icons/hi2";
+import { PageContainer, PageIntro } from "../components/common/PagePrimitives";
+import { toast, errorMessage } from "@/lib/notify";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { cn } from "@/lib/utils";
 
 interface IntelCard {
   id: string;
@@ -39,702 +47,321 @@ interface IntelCard {
   keyConcepts: string[];
 }
 
+const CATEGORIES: { id: string; label: string; icon: LucideIcon }[] = [
+  { id: "all", label: "All", icon: List },
+  { id: "AI & Models", label: "AI models", icon: Sparkles },
+  { id: "Agentic Systems", label: "Agents", icon: Bot },
+  { id: "Dev Tools & Infra", label: "Tools and infra", icon: Code2 },
+  { id: "Architecture & Specs", label: "Architecture", icon: Lightbulb },
+  { id: "Discussions", label: "Discussions", icon: MessagesSquare },
+];
+
+// Source marks render in the current text colour so they sit quietly in every theme.
+const SourceMark: React.FC<{ source: string }> = ({ source }) => {
+  const cls = "size-3 shrink-0";
+  if (source.includes("Hacker") || source.includes("HN")) return <SiYcombinator className={cls} aria-hidden />;
+  if (source.includes("GitHub")) return <SiGithub className={cls} aria-hidden />;
+  if (source.includes("arXiv")) return <ScrollText className={cls} aria-hidden />;
+  if (source.includes("Hugging")) return <SiHuggingface className={cls} aria-hidden />;
+  return <Newspaper className={cls} aria-hidden />;
+};
+
+const Meta: React.FC<{ item: IntelCard }> = ({ item }) => (
+  <div className="flex shrink-0 items-center gap-2.5 text-[11.5px] tabular-nums text-muted-foreground">
+    {item.score > 0 && (
+      <span className="flex items-center gap-0.5" title={`${item.score} points`}>
+        <ArrowUp className="size-3" aria-hidden />
+        <span className="sr-only">Score</span>
+        {item.score.toLocaleString()}
+      </span>
+    )}
+    {item.commentsCount > 0 && (
+      <span className="flex items-center gap-1" title={`${item.commentsCount} comments`}>
+        <MessagesSquare className="size-3" aria-hidden />
+        <span className="sr-only">Comments</span>
+        {item.commentsCount.toLocaleString()}
+      </span>
+    )}
+    {item.readTime && (
+      <span className="flex items-center gap-1">
+        <Clock className="size-3" aria-hidden />
+        {item.readTime.replace(" read", "")}
+      </span>
+    )}
+  </div>
+);
+
 export const TechRadarView: React.FC = () => {
   const [feed, setFeed] = useState<IntelCard[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>("");
-
-  // Horizontal Scroller Ref
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  const loadFeed = useCallback(
+    async (force = false) => {
+      setIsLoading(true);
+      try {
+        const res = await api.intel.getFeed({
+          category: activeCategory !== "all" ? activeCategory : undefined,
+          force,
+        });
+        setFeed(res.feed || []);
+        setLastUpdated(
+          res.lastUpdated ? new Date(res.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""
+        );
+        if (force) toast.success("Radar refreshed", { description: `${res.feed?.length ?? 0} stories in the stream.` });
+      } catch (err) {
+        toast.error("Could not load the radar feed", { description: errorMessage(err) });
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [activeCategory]
+  );
 
   useEffect(() => {
     loadFeed();
-  }, [activeCategory]);
-
-  const loadFeed = async (force = false) => {
-    setIsLoading(true);
-    try {
-      const res = await api.intel.getFeed({
-        category: activeCategory !== "all" ? activeCategory : undefined,
-        q: searchQuery || undefined,
-        force,
-      });
-      setFeed(res.feed || []);
-      setLastUpdated(
-        res.lastUpdated
-          ? new Date(res.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : ""
-      );
-    } catch (err) {
-      console.error("Failed to load tech intel feed:", err);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  };
+  }, [loadFeed]);
 
   const handleManualRefresh = () => {
     setIsRefreshing(true);
     loadFeed(true);
   };
 
-  const scrollLeft = () => {
-    if (scrollerRef.current) {
-      scrollerRef.current.scrollBy({ left: -380, behavior: "smooth" });
-    }
-  };
+  const scrollBy = (dx: number) => scrollerRef.current?.scrollBy({ left: dx, behavior: "smooth" });
 
-  const scrollRight = () => {
-    if (scrollerRef.current) {
-      scrollerRef.current.scrollBy({ left: 380, behavior: "smooth" });
-    }
-  };
+  const q = searchQuery.trim().toLowerCase();
+  const filteredFeed = q
+    ? feed.filter(
+        (item) =>
+          item.title.toLowerCase().includes(q) ||
+          item.executiveSummary.toLowerCase().includes(q) ||
+          item.keyConcepts?.some((k) => k.toLowerCase().includes(q))
+      )
+    : feed;
 
-  const getSourceIcon = (source: string) => {
-    if (source.includes("Hacker") || source.includes("HN")) {
-      return <SiYcombinator color="#ff6600" size={15} />;
-    }
-    if (source.includes("GitHub")) {
-      return <SiGithub size={15} />;
-    }
-    if (source.includes("arXiv")) {
-      return <SiArxiv color="#b31b1b" size={15} />;
-    }
-    return <SiHuggingface color="#ffd21e" size={15} />;
-  };
-
-  const categories = [
-    { id: "all", label: "All Streams", icon: HiOutlineQueueList },
-    { id: "AI & Models", label: "AI Models & LLMs", icon: HiSparkles },
-    { id: "Agentic Systems", label: "Agentic Systems", icon: HiBolt },
-    { id: "Dev Tools & Infra", label: "Tools & Infra", icon: HiOutlineCodeBracket },
-    { id: "Architecture & Specs", label: "Architecture", icon: HiOutlineLightBulb },
-    { id: "Discussions", label: "Top Discussions", icon: HiOutlineChatBubbleLeftRight },
-  ];
-
-  const filteredFeed = feed.filter((item) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      item.title.toLowerCase().includes(q) ||
-      item.executiveSummary.toLowerCase().includes(q) ||
-      item.keyConcepts.some((k) => k.toLowerCase().includes(q))
-    );
-  });
-
-  // Featured top 6 stories for horizontal scroller
-  const featuredStories = feed.slice(0, 6);
+  const featured = feed.slice(0, 6);
+  const showSkeleton = isLoading && feed.length === 0;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        height: "100%",
-        overflowY: "auto",
-        padding: "28px 32px 60px 32px",
-        width: "100%",
-      }}
-    >
-      <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
-        {/* Top Banner Header */}
-        <div
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "16px",
-            padding: "24px 28px",
-            marginBottom: "28px",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.02)",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "18px" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                <div
-                  style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "10px",
-                    background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    boxShadow: "0 4px 14px rgba(99, 102, 241, 0.3)",
-                  }}
-                >
-                  <HiSparkles size={20} />
-                </div>
-                <h1 style={{ fontSize: "22px", fontWeight: 700, margin: 0, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-                  Tech & AI Intelligence Radar
-                </h1>
-                <span
-                  style={{
-                    background: "rgba(99, 102, 241, 0.1)",
-                    color: "var(--accent-indigo)",
-                    padding: "4px 10px",
-                    borderRadius: "20px",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  <HiBolt size={13} /> LIVE SOURCE STREAM
-                </span>
-              </div>
-              <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: 0, maxWidth: "700px", lineHeight: "1.5" }}>
-                Real-time web crawler scanning Hacker News frontpage, arXiv releases, and AI engineering breakthroughs with direct source links.
-              </p>
-            </div>
+    <PageContainer className="flex flex-col gap-7">
+      <PageIntro
+        title="Source stream"
+        description="Hacker News front page, GitHub trending, arXiv releases and AI engineering news, summarized with direct source links."
+        actions={
+          <>
+            {lastUpdated && (
+              <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                Updated <span className="tabular-nums">{lastUpdated}</span>
+              </span>
+            )}
+            <Button onClick={handleManualRefresh} disabled={isRefreshing || isLoading}>
+              <RefreshCw className={cn(isRefreshing && "animate-spin")} data-icon="inline-start" />
+              {isRefreshing ? "Scanning…" : "Refresh stream"}
+            </Button>
+          </>
+        }
+      />
 
-            {/* Sync status & Refresh button */}
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              {lastUpdated && (
-                <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "var(--text-secondary)", fontWeight: 500 }}>
-                  <HiOutlineClock size={14} /> Synced at {lastUpdated}
-                </div>
-              )}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleManualRefresh}
-                disabled={isRefreshing || isLoading}
-                style={{
-                  padding: "9px 16px",
-                  borderRadius: "10px",
-                  background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-                  color: "#fff",
-                  border: "none",
-                  fontWeight: 600,
-                  fontSize: "13px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  boxShadow: "0 2px 10px rgba(99, 102, 241, 0.25)",
-                }}
-              >
-                <HiOutlineArrowPath size={15} className={isRefreshing ? "spin" : ""} />
-                {isRefreshing ? "Scanning Live..." : "Scrape Latest News"}
-              </motion.button>
+      {featured.length > 0 && activeCategory === "all" && !q && (
+        <section aria-labelledby="trending-heading" className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="trending-heading" className="text-[14px] font-semibold tracking-tight text-foreground">
+              Trending now
+            </h2>
+            <div className="flex gap-1.5">
+              <Button variant="outline" size="icon-sm" onClick={() => scrollBy(-380)} aria-label="Scroll trending stories left">
+                <ChevronLeft />
+              </Button>
+              <Button variant="outline" size="icon-sm" onClick={() => scrollBy(380)} aria-label="Scroll trending stories right">
+                <ChevronRight />
+              </Button>
             </div>
           </div>
-        </div>
-
-        {/* Featured Horizontal Card Scroller Section */}
-        {featuredStories.length > 0 && (
-          <div style={{ marginBottom: "32px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div
-                  style={{
-                    background: "rgba(244, 63, 94, 0.12)",
-                    color: "#e11d48",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                  }}
-                >
-                  <HiFire size={15} /> BREAKING TECH STREAMS
-                </div>
-                <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 500 }}>
-                  Top trending stories across HN & arXiv
-                </span>
-              </div>
-
-              {/* Scroller Control Arrows */}
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button
-                  onClick={scrollLeft}
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-subtle)",
-                    background: "var(--bg-card)",
-                    color: "var(--text-primary)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                  }}
-                  title="Scroll Left"
-                >
-                  <HiOutlineChevronLeft size={16} />
-                </button>
-                <button
-                  onClick={scrollRight}
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-subtle)",
-                    background: "var(--bg-card)",
-                    color: "var(--text-primary)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                  }}
-                  title="Scroll Right"
-                >
-                  <HiOutlineChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Horizontal Scroller Container */}
-            <div
-              ref={scrollerRef}
-              style={{
-                display: "flex",
-                gap: "16px",
-                overflowX: "auto",
-                scrollSnapType: "x mandatory",
-                paddingBottom: "8px",
-                scrollbarWidth: "thin",
-              }}
-            >
-              {featuredStories.map((story) => (
-                <motion.div
-                  key={story.id}
-                  whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                  style={{
-                    flex: "0 0 360px",
-                    scrollSnapAlign: "start",
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: "14px",
-                    padding: "18px 20px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
-                  }}
-                >
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            padding: "2px 7px",
-                            borderRadius: "6px",
-                            background: story.source.includes("Hacker") ? "rgba(255, 102, 0, 0.12)" : "rgba(99, 102, 241, 0.12)",
-                            color: story.source.includes("Hacker") ? "#ea580c" : "#4f46e5",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          {getSourceIcon(story.source)}
-                          {story.source}
-                        </span>
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--text-secondary)", fontWeight: 600 }}>
-                        {story.score > 0 && (
-                          <span style={{ color: "#e11d48" }}>{story.score} ▲</span>
-                        )}
-                        <span>⏱️ {story.readTime}</span>
-                      </div>
-                    </div>
-
-                    <a
-                      href={story.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 700,
-                        color: "var(--text-primary)",
-                        textDecoration: "none",
-                        lineHeight: "1.4",
-                        marginBottom: "8px",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {story.title}
-                    </a>
-
-                    <p
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--text-secondary)",
-                        lineHeight: "1.5",
-                        margin: "0 0 12px 0",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {story.executiveSummary}
-                    </p>
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", paddingTop: "10px", borderTop: "1px solid var(--border-subtle)" }}>
-                    <a
-                      href={story.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "8px",
-                        background: "var(--bg-secondary)",
-                        color: "var(--accent-indigo)",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        textDecoration: "none",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        border: "1px solid var(--border-subtle)",
-                      }}
-                    >
-                      Open Source Link <HiOutlineArrowTopRightOnSquare size={13} />
-                    </a>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Control Bar: Categories & Search */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "14px",
-            marginBottom: "24px",
-          }}
-        >
-          {/* Category Tabs */}
-          <div
-            style={{
-              display: "flex",
-              gap: "6px",
-              flexWrap: "wrap",
-              background: "var(--bg-secondary)",
-              padding: "4px",
-              borderRadius: "12px",
-              border: "1px solid var(--border-subtle)",
-            }}
-          >
-            {categories.map((cat) => {
-              const Icon = cat.icon;
-              const isSelected = activeCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  style={{
-                    padding: "7px 14px",
-                    borderRadius: "8px",
-                    border: "none",
-                    background: isSelected ? "var(--bg-card)" : "transparent",
-                    color: isSelected ? "var(--text-primary)" : "var(--text-secondary)",
-                    fontWeight: isSelected ? 600 : 500,
-                    fontSize: "13px",
-                    cursor: "pointer",
-                    boxShadow: isSelected ? "0 2px 8px rgba(0,0,0,0.06)" : "none",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <Icon size={15} color={isSelected ? "var(--accent-indigo)" : "currentColor"} />
-                  <span>{cat.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Search Box */}
-          <div style={{ position: "relative" }}>
-            <HiOutlineMagnifyingGlass
-              size={16}
-              style={{ position: "absolute", left: "12px", top: "11px", color: "var(--text-secondary)" }}
-            />
-            <input
-              type="text"
-              placeholder="Search topics, models, tools..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                padding: "8px 14px 8px 36px",
-                borderRadius: "10px",
-                border: "1px solid var(--border-subtle)",
-                background: "var(--bg-card)",
-                color: "var(--text-primary)",
-                fontSize: "13px",
-                width: "260px",
-                outline: "none",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Main Intelligence Grid */}
-        {isLoading && feed.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "80px 0", color: "var(--text-secondary)" }}>
-            <HiOutlineArrowPath size={32} className="spin" style={{ color: "var(--accent-indigo)", marginBottom: "12px" }} />
-            <p style={{ fontSize: "14px", fontWeight: 500 }}>Scanning Hacker News, arXiv, and web intelligence streams...</p>
-          </div>
-        ) : filteredFeed.length === 0 ? (
-          <div
-            style={{
-              background: "var(--bg-card)",
-              border: "1px dashed var(--border-subtle)",
-              borderRadius: "16px",
-              padding: "60px 20px",
-              textAlign: "center",
-            }}
-          >
-            <HiSparkles size={36} color="var(--accent-indigo)" style={{ marginBottom: "12px", opacity: 0.7 }} />
-            <h3 style={{ fontSize: "16px", fontWeight: 600, margin: "0 0 8px 0" }}>No intelligence digests found</h3>
-            <p style={{ color: "var(--text-secondary)", fontSize: "13px", margin: "0 0 16px 0" }}>
-              Click the button above to scrape fresh technical stories and direct source links.
-            </p>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
-              gap: "20px",
-            }}
-          >
-            {filteredFeed.map((item, idx) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 10 }}
+          <div ref={scrollerRef} className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2">
+            {featured.map((story, i) => (
+              <motion.a
+                key={story.id}
+                href={story.url}
+                target="_blank"
+                rel="noreferrer"
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.25) }}
-                whileHover={{ y: -2, transition: { duration: 0.15 } }}
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: "14px",
-                  padding: "20px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
-                }}
+                transition={{ duration: 0.28, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
+                className="group flex w-[340px] shrink-0 snap-start flex-col justify-between gap-4 rounded-xl border border-border bg-card p-4 text-foreground shadow-[var(--shadow-sm)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--brand-line)] hover:text-foreground hover:shadow-[var(--shadow-md)]"
               >
-                <div>
-                  {/* Card Top Meta */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          background: item.source.includes("Hacker") ? "rgba(255, 102, 0, 0.12)" : "rgba(99, 102, 241, 0.12)",
-                          color: item.source.includes("Hacker") ? "#ea580c" : "#4f46e5",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        {getSourceIcon(item.source)}
-                        {item.source}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          background: "var(--bg-secondary)",
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        {item.category}
-                      </span>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "var(--text-secondary)", fontWeight: 500 }}>
-                      {item.score > 0 && (
-                        <span style={{ color: "#e11d48", fontWeight: 700 }}>{item.score} ▲</span>
-                      )}
-                      {item.commentsCount > 0 && (
-                        <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
-                          <HiOutlineChatBubbleLeftRight size={12} /> {item.commentsCount}
-                        </span>
-                      )}
-                      <span>⏱️ {item.readTime}</span>
-                    </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground">
+                      <SourceMark source={story.source} />
+                      {story.source}
+                    </span>
+                    <Meta item={story} />
                   </div>
-
-                  {/* Headline Link */}
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: 700,
-                      color: "var(--text-primary)",
-                      textDecoration: "none",
-                      lineHeight: "1.4",
-                      marginBottom: "10px",
-                      display: "inline-flex",
-                      alignItems: "flex-start",
-                      gap: "6px",
-                    }}
-                  >
-                    <span>{item.title}</span>
-                    <HiOutlineArrowTopRightOnSquare size={13} style={{ flexShrink: 0, marginTop: "4px", opacity: 0.5 }} />
-                  </a>
-
-                  {/* Executive Summary */}
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "var(--text-secondary)",
-                      lineHeight: "1.55",
-                      margin: "0 0 14px 0",
-                    }}
-                  >
-                    {item.executiveSummary}
-                  </p>
-
-                  {/* Technical Highlights Box */}
-                  {item.technicalHighlights && item.technicalHighlights.length > 0 && (
-                    <div
-                      style={{
-                        background: "var(--bg-secondary)",
-                        borderRadius: "8px",
-                        padding: "10px 12px",
-                        marginBottom: "12px",
-                        border: "1px solid var(--border-subtle)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: "10px",
-                          fontWeight: 700,
-                          color: "var(--accent-indigo)",
-                          marginBottom: "6px",
-                          letterSpacing: "0.04em",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <HiBolt size={12} /> TECHNICAL HIGHLIGHTS & SPECS
-                      </div>
-                      <ul style={{ margin: 0, paddingLeft: "14px", fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.45" }}>
-                        {item.technicalHighlights.map((hl, i) => (
-                          <li key={i} style={{ marginBottom: i < item.technicalHighlights.length - 1 ? "3px" : "0" }}>
-                            {hl}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Takeaway */}
-                  {item.practicalImpact && (
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#16a34a",
-                        fontWeight: 500,
-                        marginBottom: "12px",
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "5px",
-                      }}
-                    >
-                      <HiOutlineLightBulb size={14} style={{ flexShrink: 0, marginTop: "2px" }} />
-                      <span>
-                        <strong>Takeaway:</strong> {item.practicalImpact}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Concept Tags */}
-                  {item.keyConcepts && (
-                    <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "14px" }}>
-                      {item.keyConcepts.map((tag, i) => (
-                        <span
-                          key={i}
-                          style={{
-                            fontSize: "11px",
-                            padding: "2px 7px",
-                            borderRadius: "4px",
-                            background: "var(--bg-secondary)",
-                            color: "var(--text-secondary)",
-                            fontWeight: 500,
-                          }}
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <h3 className="line-clamp-2 text-[14px] font-medium leading-snug">{story.title}</h3>
+                  <p className="line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">{story.executiveSummary}</p>
                 </div>
-
-                {/* Bottom Action Bar */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    alignItems: "center",
-                    paddingTop: "12px",
-                    borderTop: "1px solid var(--border-subtle)",
-                  }}
-                >
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      padding: "8px 16px",
-                      borderRadius: "8px",
-                      background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-                      color: "#fff",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                      textDecoration: "none",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      boxShadow: "0 2px 8px rgba(99, 102, 241, 0.25)",
-                    }}
-                  >
-                    Open Source Discussion <HiOutlineArrowTopRightOnSquare size={13} />
-                  </a>
-                </div>
-              </motion.div>
+                <span className="flex items-center gap-1 text-[12px] font-medium text-primary">
+                  Read source
+                  <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden />
+                </span>
+              </motion.a>
             ))}
           </div>
-        )}
+        </section>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={activeCategory}
+          onValueChange={(v) => v && setActiveCategory(v)}
+          aria-label="Filter by category"
+          className="flex-wrap"
+        >
+          {CATEGORIES.map((cat) => {
+            const Icon = cat.icon;
+            return (
+              <ToggleGroupItem key={cat.id} value={cat.id} aria-label={cat.label} className="gap-1.5 px-3">
+                <Icon aria-hidden />
+                {cat.label}
+              </ToggleGroupItem>
+            );
+          })}
+        </ToggleGroup>
+        <div className="relative w-full sm:w-72">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            type="search"
+            aria-label="Search stories"
+            placeholder="Search topics, models, tools…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
       </div>
-    </div>
+
+      {showSkeleton ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-5 w-4/5" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-5/6" />
+              <Skeleton className="mt-2 h-16 w-full" />
+            </div>
+          ))}
+        </div>
+      ) : filteredFeed.length === 0 ? (
+        <Empty className="rounded-xl border border-dashed border-border bg-card">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Newspaper />
+            </EmptyMedia>
+            <EmptyTitle>{q ? "No stories match your search" : "No stories in this stream yet"}</EmptyTitle>
+            <EmptyDescription>
+              {q ? "Try a broader term or another category." : "Refresh the stream to pull the latest technical stories."}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            {q ? (
+              <Button variant="outline" onClick={() => setSearchQuery("")}>
+                Clear search
+              </Button>
+            ) : (
+              <Button onClick={handleManualRefresh}>Refresh stream</Button>
+            )}
+          </EmptyContent>
+        </Empty>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          {filteredFeed.map((item, idx) => (
+            <motion.article
+              key={item.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, delay: Math.min(idx, 10) * 0.035, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] duration-200 hover:border-[var(--border-hover)] hover:shadow-[var(--shadow-md)]"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex items-center gap-1.5 truncate text-[11.5px] font-medium text-muted-foreground">
+                    <SourceMark source={item.source} />
+                    {item.source}
+                  </span>
+                  <Badge variant="secondary" className="font-normal">
+                    {item.category}
+                  </Badge>
+                </div>
+                <Meta item={item} />
+              </div>
+
+              <h3 className="text-[15px] font-medium leading-snug">
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-sm text-foreground decoration-[var(--brand-line)] underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  {item.title}
+                </a>
+              </h3>
+
+              <p className="text-[13px] leading-relaxed text-muted-foreground">{item.executiveSummary}</p>
+
+              {item.technicalHighlights?.length > 0 && (
+                <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/60 p-3">
+                  <span className="text-[12px] font-medium text-muted-foreground">Highlights</span>
+                  <ul className="flex list-disc flex-col gap-1 pl-4 text-[12.5px] leading-snug text-foreground/90 marker:text-muted-foreground">
+                    {item.technicalHighlights.map((hl, i) => (
+                      <li key={i}>{hl}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {item.practicalImpact && (
+                <p className="flex items-start gap-2 text-[12.5px] leading-snug text-foreground/90">
+                  <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
+                  <span>
+                    <span className="font-medium">Why it matters: </span>
+                    {item.practicalImpact}
+                  </span>
+                </p>
+              )}
+
+              <div className="mt-auto flex flex-col gap-3">
+                {item.keyConcepts?.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {item.keyConcepts.map((tag) => (
+                      <Badge key={tag} variant="outline" className="font-normal text-muted-foreground">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <Separator />
+                <div className="flex justify-end">
+                  <Button variant="ghost" size="sm" asChild>
+                    <a href={item.url} target="_blank" rel="noreferrer" aria-label={`Open source for ${item.title}`}>
+                      Open source
+                      <ArrowUpRight data-icon="inline-end" />
+                    </a>
+                  </Button>
+                </div>
+              </div>
+            </motion.article>
+          ))}
+        </div>
+      )}
+    </PageContainer>
   );
 };
