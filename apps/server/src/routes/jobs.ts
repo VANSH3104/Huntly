@@ -581,7 +581,7 @@ jobsRouter.get("/", async (req, res, next) => {
       });
     }
 
-    // Default canonical skill aliases for Vansh Kabra's resume
+    // Default canonical skill aliases
     [
       "typescript", "javascript", "react", "react.js", "next.js", "node.js", "express",
       "fastapi", "rest", "api", "mongodb", "redis", "docker", "linux", "git", "rust",
@@ -868,7 +868,7 @@ jobsRouter.get("/:id", async (req, res, next) => {
       });
     }
 
-    // Default canonical skill aliases for Vansh Kabra's resume
+    // Default canonical skill aliases
     [
       "typescript", "javascript", "react", "react.js", "next.js", "node.js", "express",
       "fastapi", "rest", "api", "mongodb", "redis", "docker", "linux", "git", "rust",

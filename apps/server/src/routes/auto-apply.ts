@@ -324,6 +324,17 @@ autoApplyRouter.post(
   }
 );
 
+autoApplyRouter.get("/resume-pdf", (_req: Request, res: Response) => {
+  const resume = getUploadedResume();
+  if (!resume) {
+    res.status(404).json({ error: "No resume PDF uploaded yet" });
+    return;
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", 'inline; filename="resume.pdf"');
+  res.sendFile(resume.path);
+});
+
 autoApplyRouter.delete("/resume-pdf", (_req: Request, res: Response) => {
   deleteUploadedResume();
   res.json({ ok: true });
