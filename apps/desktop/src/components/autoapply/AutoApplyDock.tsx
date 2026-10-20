@@ -1,51 +1,42 @@
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Zap,
-  X,
-  Pause,
-  Play,
-  CheckCircle2,
   AlertTriangle,
-  XCircle,
-  Loader2,
+  CheckCircle2,
+  ChevronDown,
   Clock,
   ExternalLink,
-  RotateCcw,
-  Trash2,
-  ChevronDown,
-  ChevronUp,
+  Loader2,
   LogIn,
+  Minus,
+  Pause,
+  Play,
+  RotateCcw,
   SkipForward,
+  Trash2,
+  XCircle,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { api, type AutoApplyQueueItem, type AutoApplyStatus } from "../../lib/api";
 import { useStore } from "../../store/useStore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
+import { errorMessage, toast } from "@/lib/notify";
 
 type Tab = "all" | "active" | "open" | "review" | "skipped" | "done" | "failed";
 
-const STATUS: Record<AutoApplyStatus, { label: string; color: string; icon: React.ReactNode }> = {
-  queued: { label: "Queued", color: "var(--text-muted)", icon: <Clock size={14} /> },
-  open: { label: "Open in browser", color: "var(--accent-cyan)", icon: <ExternalLink size={14} /> },
-  running: { label: "Applying", color: "var(--accent-indigo)", icon: <Loader2 size={14} className="animate-spin" /> },
-  needs_review: { label: "Needs you", color: "var(--accent-amber)", icon: <AlertTriangle size={14} /> },
-  needs_login: { label: "Needs sign-in", color: "var(--accent-amber)", icon: <LogIn size={14} /> },
-  skipped: { label: "Skipped", color: "var(--text-muted)", icon: <SkipForward size={14} /> },
-  submitted: { label: "Applied", color: "var(--accent-emerald)", icon: <CheckCircle2 size={14} /> },
-  failed: { label: "Failed", color: "var(--accent-rose)", icon: <XCircle size={14} /> },
-};
-
-const smallBtn: React.CSSProperties = {
-  fontSize: "11px",
-  padding: "5px 9px",
-  borderRadius: "var(--radius-sm)",
-  border: "1px solid var(--border-subtle)",
-  background: "var(--bg-card)",
-  color: "var(--text-secondary)",
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "5px",
-  textDecoration: "none",
+const STATUS: Record<AutoApplyStatus, { label: string; tone: string; icon: LucideIcon; spin?: boolean }> = {
+  queued: { label: "Queued", tone: "text-muted-foreground", icon: Clock },
+  open: { label: "Open in browser", tone: "text-[var(--info)]", icon: ExternalLink },
+  running: { label: "Applying", tone: "text-primary", icon: Loader2, spin: true },
+  needs_review: { label: "Needs you", tone: "text-[var(--warning)]", icon: AlertTriangle },
+  needs_login: { label: "Needs sign-in", tone: "text-[var(--warning)]", icon: LogIn },
+  skipped: { label: "Skipped", tone: "text-muted-foreground", icon: SkipForward },
+  submitted: { label: "Applied", tone: "text-[var(--success)]", icon: CheckCircle2 },
+  failed: { label: "Failed", tone: "text-destructive", icon: XCircle },
 };
 
 export const AutoApplyDock: React.FC = () => {
@@ -68,7 +59,11 @@ export const AutoApplyDock: React.FC = () => {
     qc.invalidateQueries({ queryKey: ["applications"] });
     qc.invalidateQueries({ queryKey: ["jobs"] });
   };
-  const act = useMutation({ mutationFn: (fn: () => Promise<unknown>) => fn(), onSuccess: refresh });
+  const act = useMutation({
+    mutationFn: (fn: () => Promise<unknown>) => fn(),
+    onSuccess: refresh,
+    onError: (err) => toast.error("Auto-apply action failed", { description: errorMessage(err) }),
+  });
 
   if (!data || data.items.length === 0) return null;
 
@@ -90,35 +85,30 @@ export const AutoApplyDock: React.FC = () => {
   });
 
   if (!open) {
+    const summary = [
+      `${stats.submitted} applied`,
+      working > 0 && `${working} left`,
+      stats.open > 0 && `${stats.open} open for you`,
+      stats.needs_review > 0 && `${stats.needs_review} need you`,
+      parked > 0 && `${parked} skipped`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     return (
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        style={{
-          position: "fixed",
-          right: 20,
-          bottom: 20,
-          zIndex: 90,
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          padding: "10px 16px",
-          borderRadius: "var(--radius-full)",
-          border: "1px solid var(--border-subtle)",
-          background: "var(--bg-card)",
-          boxShadow: "var(--shadow-lg)",
-          cursor: "pointer",
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "var(--text-primary)",
-        }}
+        aria-label={`Open auto-apply panel: ${summary}`}
+        className="fixed right-5 bottom-5 z-40 flex items-center gap-2 rounded-full border border-border bg-popover px-4 py-2.5 text-xs font-medium text-foreground shadow-[var(--shadow-lg)] transition-colors outline-none hover:bg-card focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        {working > 0 && !paused ? <Loader2 size={14} className="animate-spin" color="var(--accent-indigo)" /> : <Zap size={14} color="var(--accent-indigo)" />}
+        {working > 0 && !paused ? (
+          <Loader2 className="size-3.5 animate-spin text-primary" aria-hidden />
+        ) : (
+          <Zap className="size-3.5 text-primary" aria-hidden />
+        )}
         <span>
-          Auto-Apply · {stats.submitted} applied
-          {working > 0 ? ` · ${working} left` : ""}
-          {stats.open > 0 ? ` · ${stats.open} open for you` : ""}
-          {stats.needs_review > 0 ? ` · ${stats.needs_review} need you` : ""}
-          {parked > 0 ? ` · ${parked} skipped` : ""}
+          <span className="font-semibold">Auto-apply</span>
+          <span className="text-muted-foreground"> · {summary}</span>
         </span>
       </button>
     );
@@ -129,84 +119,85 @@ export const AutoApplyDock: React.FC = () => {
     ["active", "Active", working],
     ["open", "Open tabs", stats.open],
     ["review", "Needs you", stats.needs_review],
-    ["skipped", "Skipped / sign-in", parked],
+    ["skipped", "Skipped", parked],
     ["done", "Applied", stats.submitted],
     ["failed", "Failed", stats.failed],
   ];
 
   return (
-    <div
-      className="glass-panel"
-      style={{
-        position: "fixed",
-        right: 20,
-        bottom: 20,
-        zIndex: 90,
-        width: "min(440px, calc(100vw - 40px))",
-        maxHeight: "72vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--bg-card)",
-        border: "1px solid var(--border-subtle)",
-        borderRadius: "var(--radius-xl)",
-        boxShadow: "var(--shadow-lg)",
-        overflow: "hidden",
-      }}
+    <section
+      aria-label="Auto-apply queue"
+      className="fixed right-5 bottom-5 z-40 flex max-h-[72vh] w-[min(440px,calc(100vw-40px))] flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-[var(--shadow-xl)]"
     >
-      <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: "10px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "14px", color: "var(--text-primary)" }}>
-            <Zap size={16} color="var(--accent-indigo)" /> Auto-Apply
-            <span style={{ fontSize: "11px", fontWeight: 500, color: "var(--text-muted)" }}>
+      <div className="flex flex-col gap-3 border-b border-border px-4 pt-3.5 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Zap className="size-4 text-primary" aria-hidden />
+            Auto-apply
+            <span className="text-xs font-normal text-muted-foreground tabular-nums">
               {submittedToday}/{config.dailyCap} today
             </span>
-          </div>
-          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-            <button style={smallBtn} onClick={() => act.mutate(() => (paused ? api.autoApply.resumeQueue() : api.autoApply.pauseQueue()))}>
-              {paused ? <Play size={12} /> : <Pause size={12} />} {paused ? "Resume" : "Pause"}
-            </button>
-            {stats.queued > 0 && (
-              <button style={smallBtn} onClick={() => act.mutate(() => api.autoApply.cancelQueued())} title="Remove everything still waiting">
-                Cancel queued
-              </button>
-            )}
-            <button className="btn-icon" onClick={() => setOpen(false)} aria-label="Minimise">
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-
-        <div style={{ height: 6, borderRadius: 3, background: "var(--bg-surface)", overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: "var(--gradient-brand)", transition: "width 0.4s" }} />
-        </div>
-        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-          {paused ? "Paused. " : working > 0 ? "Working. " : "Done. "}
-          {finished} of {total} finished
-        </div>
-
-        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-          {tabs.map(([id, label, n]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              style={{
-                ...smallBtn,
-                background: tab === id ? "rgba(79, 70, 229, 0.08)" : "transparent",
-                borderColor: tab === id ? "var(--border-active)" : "transparent",
-                color: tab === id ? "var(--accent-indigo)" : "var(--text-muted)",
-                fontWeight: tab === id ? 600 : 500,
-              }}
+          </h2>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => act.mutate(() => (paused ? api.autoApply.resumeQueue() : api.autoApply.pauseQueue()))}
             >
-              {label} {n}
-            </button>
-          ))}
+              {paused ? <Play aria-hidden /> : <Pause aria-hidden />}
+              {paused ? "Resume" : "Pause"}
+            </Button>
+            {stats.queued > 0 && (
+              <Button variant="ghost" size="xs" onClick={() => act.mutate(() => api.autoApply.cancelQueued())} title="Remove everything still waiting">
+                Cancel queued
+              </Button>
+            )}
+            <Button variant="ghost" size="icon-xs" onClick={() => setOpen(false)} aria-label="Minimise auto-apply panel">
+              <Minus />
+            </Button>
+          </div>
         </div>
+
+        <div className="flex flex-col gap-1.5">
+          <div
+            role="progressbar"
+            aria-label="Auto-apply progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+            className="h-1.5 overflow-hidden rounded-full bg-secondary"
+          >
+            <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {paused ? "Paused. " : working > 0 ? "Working. " : "Done. "}
+            {finished} of {total} finished
+          </p>
+        </div>
+
+        <ToggleGroup
+          type="single"
+          size="sm"
+          aria-label="Filter queue"
+          value={tab}
+          onValueChange={(v) => v && setTab(v as Tab)}
+          className="w-full flex-wrap justify-start gap-1"
+        >
+          {tabs.map(([id, label, n]) => (
+            <ToggleGroupItem
+              key={id}
+              value={id}
+              className="h-7 rounded-md px-2 text-xs data-[state=on]:bg-[var(--brand-soft)] data-[state=on]:text-[var(--brand-strong)]"
+            >
+              {label}
+              <span className="text-[10.5px] opacity-70 tabular-nums">{n}</span>
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       </div>
 
-      <div style={{ overflowY: "auto", padding: "8px" }}>
-        {visible.length === 0 && (
-          <div style={{ padding: "24px", textAlign: "center", fontSize: "12px", color: "var(--text-muted)" }}>Nothing here.</div>
-        )}
+      <div className="flex flex-col gap-1.5 overflow-y-auto p-2">
+        {visible.length === 0 && <p className="p-6 text-center text-xs text-muted-foreground">Nothing here.</p>}
         {visible.map((item) => (
           <QueueRow
             key={item.id}
@@ -217,17 +208,19 @@ export const AutoApplyDock: React.FC = () => {
           />
         ))}
         {parked > 0 && tab === "skipped" && (
-          <button style={{ ...smallBtn, margin: "8px" }} onClick={() => act.mutate(() => api.autoApply.rerun(["skipped", "needs_login"]))}>
-            <RotateCcw size={12} /> Re-run all skipped ({parked})
-          </button>
+          <Button variant="outline" size="sm" className="m-1 self-start" onClick={() => act.mutate(() => api.autoApply.rerun(["skipped", "needs_login"]))}>
+            <RotateCcw data-icon="inline-start" aria-hidden />
+            Re-run all skipped ({parked})
+          </Button>
         )}
         {stats.failed > 0 && tab === "failed" && (
-          <button style={{ ...smallBtn, margin: "8px" }} onClick={() => act.mutate(() => api.autoApply.clearFailed())}>
-            <Trash2 size={12} /> Clear failed
-          </button>
+          <Button variant="outline" size="sm" className="m-1 self-start" onClick={() => act.mutate(() => api.autoApply.clearFailed())}>
+            <Trash2 data-icon="inline-start" aria-hidden />
+            Clear failed
+          </Button>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 
@@ -238,8 +231,10 @@ const QueueRow: React.FC<{
   onAct: (fn: () => Promise<unknown>) => void;
 }> = ({ item, expanded, onToggle, onAct }) => {
   const st = STATUS[item.status];
+  const Icon = st.icon;
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const canAct = ["needs_review", "failed", "skipped", "needs_login"].includes(item.status);
+  const detailsId = `queue-item-${item.id}`;
 
   const saveAnswers = async () => {
     for (const [q, a] of Object.entries(answers)) {
@@ -248,113 +243,136 @@ const QueueRow: React.FC<{
   };
 
   return (
-    <div style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", marginBottom: "6px", background: "var(--bg-surface)" }}>
-      <div onClick={onToggle} style={{ display: "flex", gap: "10px", alignItems: "center", padding: "10px 12px", cursor: "pointer" }}>
-        <span style={{ color: st.color, display: "flex" }}>{st.icon}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
-          <div style={{ fontSize: "11px", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {item.company} · <span style={{ color: st.color }}>{st.label}</span>
+    <div className="rounded-xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={detailsId}
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <Icon className={cn("size-4 shrink-0", st.tone, st.spin && "animate-spin")} aria-hidden />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-[13px] font-medium text-foreground">{item.title}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {item.company} · <span className={st.tone}>{st.label}</span>
             {item.reason && item.status !== "submitted" && item.reason !== "signin" && item.reason !== "force" ? ` · ${item.reason}` : ""}
-          </div>
-        </div>
-        {expanded ? <ChevronUp size={14} color="var(--text-muted)" /> : <ChevronDown size={14} color="var(--text-muted)" />}
-      </div>
+          </span>
+        </span>
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} aria-hidden />
+      </button>
 
       {expanded && (
-        <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div id={detailsId} className="flex flex-col gap-3 px-3 pb-3">
           {item.unfilled.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--accent-amber)" }}>It needs your answer for these. Saved once, reused on every future job.</div>
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-[var(--warning)]">It needs your answer for these. Saved once, reused on every future job.</p>
               {item.unfilled.map((q) => (
-                <input
+                <Input
                   key={q}
+                  aria-label={q}
                   placeholder={q}
                   value={answers[q] ?? ""}
                   onChange={(e) => setAnswers({ ...answers, [q]: e.target.value })}
-                  style={{ fontSize: "12px", padding: "7px 9px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)", background: "var(--bg-input)", color: "var(--text-primary)" }}
+                  className="h-8 text-xs"
                 />
               ))}
             </div>
           )}
 
           {item.screenshot && (
-            <a href={`/api/auto-apply/screenshot/${item.screenshot}`} target="_blank" rel="noreferrer">
+            <a
+              href={`/api/auto-apply/screenshot/${item.screenshot}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
               <img
                 src={`/api/auto-apply/screenshot/${item.screenshot}`}
-                alt="Application preview"
-                style={{ width: "100%", maxHeight: 200, objectFit: "cover", objectPosition: "top", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)" }}
+                alt={`Application preview for ${item.title}`}
+                className="max-h-[200px] w-full rounded-lg border border-border object-cover object-top"
               />
             </a>
           )}
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            <a href={item.applyUrl} target="_blank" rel="noreferrer" style={smallBtn}>
-              <ExternalLink size={12} /> Open page
-            </a>
+          <div className="flex flex-wrap gap-1.5">
+            <Button variant="outline" size="xs" asChild>
+              <a href={item.applyUrl} target="_blank" rel="noreferrer">
+                <ExternalLink aria-hidden />
+                Open page
+              </a>
+            </Button>
             {item.status === "open" && (
               <>
-                <button
-                  style={{ ...smallBtn, borderColor: "var(--border-active)", color: "var(--accent-indigo)", fontWeight: 600 }}
-                  onClick={() => onAct(() => api.autoApply.focusItem(item.id))}
-                  title="Switch to this job's tab in the browser window"
-                >
-                  <ExternalLink size={12} /> Show tab
-                </button>
-                <button style={smallBtn} onClick={() => onAct(() => api.autoApply.markItemApplied(item.id))} title="You submitted it yourself. Put it on the board.">
-                  <CheckCircle2 size={12} /> I submitted it
-                </button>
+                <Button size="xs" onClick={() => onAct(() => api.autoApply.focusItem(item.id))} title="Switch to this job's tab in the browser window">
+                  <ExternalLink aria-hidden />
+                  Show tab
+                </Button>
+                <Button variant="outline" size="xs" onClick={() => onAct(() => api.autoApply.markItemApplied(item.id))} title="You submitted it yourself. Put it on the board.">
+                  <CheckCircle2 aria-hidden />I submitted it
+                </Button>
               </>
             )}
             {item.status === "needs_review" && /captcha/i.test(item.reason ?? "") && (
-              <button
-                style={{ ...smallBtn, borderColor: "var(--border-active)", color: "var(--accent-indigo)", fontWeight: 600 }}
+              <Button
+                size="xs"
                 onClick={() => onAct(() => api.autoApply.retryItem(item.id, { signIn: true }))}
                 title="Opens a browser window. Solve the captcha and it submits for you."
               >
-                <LogIn size={12} /> Open &amp; finish
-              </button>
+                <LogIn aria-hidden />
+                Open and finish
+              </Button>
             )}
             {item.status === "needs_login" && (
-              <button
-                style={{ ...smallBtn, borderColor: "var(--border-active)", color: "var(--accent-indigo)", fontWeight: 600 }}
+              <Button
+                size="xs"
                 onClick={() => onAct(() => api.autoApply.retryItem(item.id, { signIn: true }))}
                 title="Opens a browser window. Sign in, and it carries on automatically."
               >
-                <LogIn size={12} /> Sign in &amp; run
-              </button>
+                <LogIn aria-hidden />
+                Sign in and run
+              </Button>
             )}
             {canAct && (
-              <button
-                style={smallBtn}
+              <Button
+                variant="outline"
+                size="xs"
                 onClick={async () => {
-                  await saveAnswers();
+                  try {
+                    await saveAnswers();
+                  } catch (err) {
+                    toast.error("Could not save your answers", { description: errorMessage(err) });
+                    return;
+                  }
                   onAct(() => api.autoApply.retryItem(item.id));
                 }}
               >
-                <RotateCcw size={12} /> {item.status === "skipped" || item.status === "needs_login" ? "Re-run" : "Retry"}
+                <RotateCcw aria-hidden />
+                {item.status === "skipped" || item.status === "needs_login" ? "Re-run" : "Retry"}
                 {item.unfilled.length > 0 ? " with answers" : ""}
-              </button>
+              </Button>
             )}
             {item.status === "needs_review" && (
               <>
-                <button style={smallBtn} onClick={() => onAct(() => api.autoApply.retryItem(item.id, { force: true }))} title="Submit even if some required fields are empty">
-                  <Zap size={12} /> Submit anyway
-                </button>
-                <button style={smallBtn} onClick={() => onAct(() => api.autoApply.markItemApplied(item.id))} title="You applied by hand. Put it on the board.">
-                  <CheckCircle2 size={12} /> I applied
-                </button>
+                <Button variant="outline" size="xs" onClick={() => onAct(() => api.autoApply.retryItem(item.id, { force: true }))} title="Submit even if some required fields are empty">
+                  <Zap aria-hidden />
+                  Submit anyway
+                </Button>
+                <Button variant="outline" size="xs" onClick={() => onAct(() => api.autoApply.markItemApplied(item.id))} title="You applied by hand. Put it on the board.">
+                  <CheckCircle2 aria-hidden />I applied
+                </Button>
               </>
             )}
             {item.status !== "running" && item.status !== "submitted" && (
-              <button style={smallBtn} onClick={() => onAct(() => api.autoApply.removeItem(item.id))}>
-                <Trash2 size={12} /> {item.status === "open" ? "Close tab" : "Remove"}
-              </button>
+              <Button variant="ghost" size="xs" onClick={() => onAct(() => api.autoApply.removeItem(item.id))}>
+                <Trash2 aria-hidden />
+                {item.status === "open" ? "Close tab" : "Remove"}
+              </Button>
             )}
           </div>
 
           {item.logs.length > 0 && (
-            <pre style={{ margin: 0, fontSize: "10.5px", lineHeight: 1.5, maxHeight: 120, overflow: "auto", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", whiteSpace: "pre-wrap" }}>
+            <pre className="max-h-[120px] overflow-auto rounded-lg bg-muted/60 p-2 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
               {item.logs.slice(-10).join("\n")}
             </pre>
           )}
