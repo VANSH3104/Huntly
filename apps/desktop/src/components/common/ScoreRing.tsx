@@ -1,4 +1,5 @@
 import React from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 interface ScoreRingProps {
   score: number; // 0 to 1 or 0 to 100
@@ -8,6 +9,13 @@ interface ScoreRingProps {
   showPercentage?: boolean;
 }
 
+function toneFor(score: number): string {
+  if (score >= 80) return "var(--success)";
+  if (score >= 60) return "var(--brand)";
+  if (score >= 40) return "var(--warning)";
+  return "var(--danger)";
+}
+
 export const ScoreRing: React.FC<ScoreRingProps> = ({
   score,
   size = 56,
@@ -15,51 +23,19 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
   label,
   showPercentage = true,
 }) => {
-  // Normalize score to 0 - 100
+  const reduce = useReducedMotion();
   const normalized = Math.min(100, Math.max(0, score <= 1 ? Math.round(score * 100) : Math.round(score)));
-
   const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (normalized / 100) * circumference;
-
-  // Curated color based on score
-  let strokeColor = "#64748b";
-  let textColor = "#475569";
-
-  if (normalized >= 85) {
-    strokeColor = "#2563eb"; // sapphire blue
-    textColor = "#1d4ed8";
-  } else if (normalized >= 70) {
-    strokeColor = "#4f46e5"; // indigo
-    textColor = "#4338ca";
-  } else if (normalized >= 50) {
-    strokeColor = "#0284c7"; // sky
-    textColor = "#0369a1";
-  } else if (normalized >= 30) {
-    strokeColor = "#d97706"; // amber
-    textColor = "#b45309";
-  } else {
-    strokeColor = "#e11d48"; // rose
-    textColor = "#be123c";
-  }
+  const tone = toneFor(normalized);
 
   return (
     <div
-      style={{
-        display: "inline-flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        position: "relative",
-      }}
+      className="inline-flex shrink-0 flex-col items-center justify-center"
+      role="img"
+      aria-label={`${label ? `${label}: ` : "Match score "}${normalized}%`}
     >
-      <svg
-        width={size}
-        height={size}
-        style={{
-          transform: "rotate(-90deg)",
-        }}
-      >
+      <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -68,46 +44,32 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
           strokeWidth={strokeWidth}
           fill="transparent"
         />
-        <circle
+        <motion.circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={strokeColor}
+          stroke={tone}
           strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
           fill="transparent"
-          style={{
-            transition: "stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-          }}
+          initial={{ pathLength: reduce ? normalized / 100 : 0 }}
+          animate={{ pathLength: normalized / 100 }}
+          transition={{ duration: reduce ? 0 : 0.7, ease: [0.16, 1, 0.3, 1], delay: reduce ? 0 : 0.08 }}
         />
       </svg>
       {showPercentage && (
         <span
-          style={{
-            position: "absolute",
-            fontFamily: "var(--font-mono)",
-            fontWeight: 700,
-            fontSize: size * 0.28,
-            color: textColor,
-          }}
+          className="absolute inset-x-0 text-center font-semibold tabular-nums text-foreground"
+          style={{ fontSize: Math.max(10, size * 0.26), top: "50%", transform: "translateY(-50%)", lineHeight: 1 }}
         >
-          {normalized}%
+          {normalized}
+          <span className="text-muted-foreground" style={{ fontSize: "0.7em" }}>
+            %
+          </span>
         </span>
       )}
-      {label && (
-        <span
-          style={{
-            fontSize: "11px",
-            color: "var(--text-secondary)",
-            marginTop: "4px",
-            fontWeight: 500,
-          }}
-        >
-          {label}
-        </span>
-      )}
+      </div>
+      {label && <span className="mt-1 text-[11px] font-medium text-muted-foreground">{label}</span>}
     </div>
   );
 };
