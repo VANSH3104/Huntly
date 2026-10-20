@@ -8,6 +8,8 @@ import cors from "cors";
 import { getDatabase } from "@agentforge/database";
 import { runMigrations } from "@agentforge/database";
 
+import fs from "node:fs";
+
 // Routes
 import { jobsRouter } from "./routes/jobs.js";
 import { companiesRouter } from "./routes/companies.js";
@@ -20,7 +22,6 @@ import { settingsRouter } from "./routes/settings.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { aiRouter } from "./routes/ai.js";
 import { intelRouter } from "./routes/intel.js";
-import { sandboxRouter } from "./routes/sandbox.js";
 import { autoApplyRouter } from "./routes/auto-apply.js";
 import { autoApplyQueue } from "./crawler/auto-applier/queue.js";
 
@@ -37,14 +38,23 @@ async function bootstrap(): Promise<void> {
 
   const app = express();
 
+  const customOrigins = process.env["CORS_ORIGINS"]?.split(",").map((s) => s.trim()) ?? [];
+  const defaultOrigins = ["http://localhost:1420", "http://localhost:5173", "tauri://localhost"];
+  const allowedOrigins = [...defaultOrigins, ...customOrigins];
+
   app.use(cors({
-    origin: ["http://localhost:1420", "http://localhost:5173", "tauri://localhost"],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   }));
   app.use(express.json({ limit: "10mb" }));
 
   // Health check
-  app.get("/health", (_req, res) => {
+  app.get(["/health", "/api/health"], (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
@@ -60,8 +70,24 @@ async function bootstrap(): Promise<void> {
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/intel", intelRouter);
-  app.use("/api/sandbox", sandboxRouter);
   app.use("/api/auto-apply", autoApplyRouter);
+
+  // Serve static UI if available (Docker / production build)
+  const candidateDistPaths = [
+    process.env["CLIENT_DIST_PATH"],
+    path.resolve(process.cwd(), "../desktop/dist"),
+    path.resolve(process.cwd(), "apps/desktop/dist"),
+  ].filter((p): p is string => Boolean(p));
+
+  const clientDist = candidateDistPaths.find((p) => fs.existsSync(p));
+  if (clientDist) {
+    console.log(`✓ Serving desktop UI from ${clientDist}`);
+    app.use(express.static(clientDist));
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith("/api")) return next();
+      res.sendFile(path.join(clientDist, "index.html"));
+    });
+  }
 
   // Global error handler
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
