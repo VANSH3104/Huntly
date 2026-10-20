@@ -85,7 +85,16 @@ Copy `.env.example` to `.env`. The main variables are:
 | `DATABASE_PATH` | Location of the SQLite file |
 | `CRAWLER_CONCURRENCY`, `CRAWLER_REQUEST_DELAY_MS` | How politely the crawler behaves |
 
-You can also set the Gemini key and model from the Settings screen.
+You can also set your Gemini key, LLM gateway, and search provider directly from the **Settings** screen.
+
+### Targeting & Filter Criteria in Settings
+
+You can customize your job hunt and crawler targeting rules from the **Settings** screen without editing config files:
+
+- **Target Roles:** Comma-separated job titles (e.g. `Software Engineer, Backend Engineer, Full Stack Engineer`) used by crawlers to find relevant openings.
+- **Target Locations:** Desired cities, countries, or `Remote`.
+- **Minimum Match Threshold:** Set a score cut-off slider (e.g. `60%`) so roles below your resume match threshold are filtered out from highlights.
+- **Crawl Interval:** Set the background schedule (1 to 48 hours) for automatic discovery passes.
 
 ## Project layout
 
