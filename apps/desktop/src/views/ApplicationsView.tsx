@@ -12,6 +12,7 @@ import {
   Trash2,
   MoveRight,
   Plus,
+  Zap,
 } from "lucide-react";
 
 interface Column {
@@ -165,6 +166,11 @@ export const ApplicationsView: React.FC = () => {
                       <div style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>
                         {app.jobTitle || "Software Engineer"}
                       </div>
+                      {typeof app.notes === "string" && app.notes.startsWith("Auto-applied") && (
+                        <div style={{ fontSize: "10px", fontWeight: 600, color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Zap size={10} /> Applied by Auto-Apply
+                        </div>
+                      )}
                       <div
                         style={{
                           fontSize: "11px",

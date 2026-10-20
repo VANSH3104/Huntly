@@ -4,6 +4,7 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { CommandPalette } from "./components/common/CommandPalette";
 import { JobDetailModal } from "./views/JobDetailModal";
+import { AutoApplyDock } from "./components/autoapply/AutoApplyDock";
 
 // Views
 import { DashboardView } from "./views/DashboardView";
@@ -58,6 +59,7 @@ export const App: React.FC = () => {
       {/* Overlays & Modals */}
       <CommandPalette />
       <JobDetailModal />
+      <AutoApplyDock />
 
       {/* Notifications Drawer */}
       {isNotificationPanelOpen && (

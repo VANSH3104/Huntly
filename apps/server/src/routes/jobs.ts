@@ -1,18 +1,52 @@
 import { Router } from "express";
 import { getDatabase, jobs, companies, jobMatches, aiAnalyses, applications, resumes, resumeSkills } from "@agentforge/database";
-import { eq, desc, asc, and, gte, lte, like, inArray, sql, ne } from "drizzle-orm";
+import { eq, desc, asc, and, gte, lte, like, inArray, sql, ne, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeLocation } from "../utils/normalize.js";
 
 export const jobsRouter = Router();
 
-const JobFilterSchema = z.object({
+// z.coerce.boolean() turns the string "false" into true, so query flags are parsed explicitly.
+const flag = z.preprocess((v) => v === true || v === "1" || v === "true", z.boolean());
+const csvList = z
+  .string()
+  .optional()
+  .transform((v) => (v ? v.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : []));
+const matchMode = z.enum(["any", "all"]).default("any");
+
+const EMPLOYMENT_TYPES = ["full-time", "part-time", "contract", "internship", "freelance"] as const;
+type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
+
+const AdvancedFilterSchema = z.object({
+  excludeKeywords: csvList,
+  excludeCompanies: csvList,
+  includeCompanies: csvList,
+  titleOnly: flag,
+  includeDescription: flag,
+  searchMode: matchMode,
+  exactWord: flag,
+  skillsMode: matchMode,
+  employmentType: csvList.pipe(z.array(z.enum(EMPLOYMENT_TYPES))),
+  experienceMin: z.coerce.number().int().min(0).max(30).optional(),
+  experienceMax: z.coerce.number().int().min(0).max(30).optional(),
+  salaryMin: z.coerce.number().min(0).optional(),
+  hasSalary: flag,
+  country: csvList,
+  visaSponsorship: flag,
+  companySize: csvList,
+  companyType: csvList,
+  postedAfter: z.coerce.date().optional(),
+  facets: flag,
+});
+type AdvancedFilter = z.infer<typeof AdvancedFilterSchema>;
+
+const JobFilterSchema = AdvancedFilterSchema.extend({
   status: z.enum(["all", "active", "stale", "closed"]).optional(),
   minScore: z.coerce.number().min(0).max(100).optional(),
   resumeId: z.string().optional(),
   location: z.string().optional(),
-  remote: z.coerce.boolean().optional(),
-  remoteOnly: z.coerce.boolean().optional(),
+  remote: flag.optional(),
+  remoteOnly: flag.optional(),
   search: z.string().optional(),
   role: z.string().optional(),
   specialization: z.string().optional(),
@@ -35,8 +69,174 @@ const JobFilterSchema = z.object({
   sortOrder: z.string().optional(),
   postedWithin: z.enum(["all", "today", "4h", "9h", "24h", "3d", "7d", "1w", "2w", "1m", "30d", "3m", "any"]).optional(),
   tab: z.enum(["recommended", "new", "all", "saved", "applied"]).optional(),
-  hideApplied: z.coerce.boolean().optional().default(true),
+  // Absent means true; only an explicit "false"/"0" shows applied jobs.
+  hideApplied: z.preprocess((v) => !(v === false || v === "false" || v === "0"), z.boolean()),
 });
+
+// ── Text matching ────────────────────────────────────────────────────────────
+// SQLite has no regex, so whole-word matching pads the text with spaces after
+// mapping punctuation to spaces and then looks for "% term %".
+const WORD_BREAKS = ["-", "/", ",", ".", "(", ")", "[", "]", "|", ":", ";", "!", "?", "&", "\n", "\r", "\t"];
+const EXPERIENCE_BREAKS = ["(", ")", ",", ":", ";", "\n", "\r", "\t"];
+
+function padded(col: SQL, breaks: string[]): SQL {
+  let expr = sql`lower(COALESCE(${col}, ''))`;
+  for (const ch of breaks) expr = sql`replace(${expr}, ${ch}, ' ')`;
+  return sql`(' ' || ${expr} || ' ')`;
+}
+
+function splitTerms(raw: string | undefined): string[] {
+  return raw ? raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : [];
+}
+
+function normalizeTerm(term: string): string {
+  let out = term.toLowerCase();
+  for (const ch of WORD_BREAKS) out = out.split(ch).join(" ");
+  return out.replace(/\s+/g, " ").trim();
+}
+
+type TextField = "title" | "normalizedTitle" | "company" | "skills" | "description";
+const TEXT_FIELDS: Record<TextField, SQL> = {
+  title: sql`${jobs.title}`,
+  normalizedTitle: sql`${jobs.normalizedTitle}`,
+  company: sql`${companies.name}`,
+  skills: sql`${jobs.skills}`,
+  description: sql`${jobs.description}`,
+};
+
+function fieldContains(field: TextField, term: string, exactWord: boolean): SQL {
+  if (exactWord) return sql`${padded(TEXT_FIELDS[field], WORD_BREAKS)} LIKE ${`% ${normalizeTerm(term)} %`}`;
+  return sql`lower(COALESCE(${TEXT_FIELDS[field]}, '')) LIKE ${`%${term}%`}`;
+}
+
+function anyFieldContains(fields: TextField[], term: string, exactWord: boolean): SQL {
+  return sql`(${sql.join(fields.map((f) => fieldContains(f, term, exactWord)), sql` OR `)})`;
+}
+
+function combine(clauses: SQL[], mode: "any" | "all"): SQL {
+  return sql`(${sql.join(clauses, mode === "all" ? sql` AND ` : sql` OR `)})`;
+}
+
+// A multi-word term also matches when every word appears somewhere in the
+// non-description fields, so "senior backend" finds "Senior Engineer, Backend".
+function termMatch(term: string, fields: TextField[], exactWord: boolean): SQL {
+  const phrase = anyFieldContains(fields, term, exactWord);
+  const words = term.split(/\s+/).filter((w) => w.length > 1);
+  const wordFields = fields.filter((f) => f !== "description");
+  if (words.length < 2 || wordFields.length === 0) return phrase;
+  const allWords = combine(words.map((w) => anyFieldContains(wordFields, w, exactWord)), "all");
+  return sql`(${phrase} OR ${allWords})`;
+}
+
+// ── Advanced filters ─────────────────────────────────────────────────────────
+function jsonField(col: SQL, path: string): SQL {
+  return sql`(CASE WHEN json_valid(${col}) THEN json_extract(${col}, ${path}) END)`;
+}
+
+const SALARY_VALUE = sql`COALESCE(${jsonField(sql`${jobs.salaryJson}`, "$.max")}, ${jsonField(sql`${jobs.salaryJson}`, "$.min")})`;
+
+const EMPLOYMENT_PATTERNS: Record<EmploymentType, string[]> = {
+  "full-time": ["full time", "fulltime", "permanent"],
+  "part-time": ["part time", "parttime"],
+  contract: ["contract", "contractor", "temporary"],
+  internship: ["intern", "internship", "interns"],
+  freelance: ["freelance", "freelancer"],
+};
+
+const VISA_POSITIVE = ["%visa sponsor%", "%sponsorship%", "%h1b%", "%h-1b%", "%relocation%", "%relocate%"];
+const VISA_NEGATIVE = ["%no visa sponsor%", "%not sponsor%", "%unable to sponsor%", "%cannot sponsor%", "%not able to sponsor%", "%not offer visa%", "%not provide visa%", "%no sponsorship%", "%without sponsorship%"];
+
+// Experience is approximated in SQL: a job counts as requiring N years when its
+// title/description says "N+ years", "N years", "N yrs", "N-M years" or "N to M years",
+// and it passes when N is within [experienceMin, experienceMax]. Doing this in SQL keeps
+// total/pagination exact; the cost is that jobs which never state years are excluded and
+// phrasings like "minimum of three years" are missed. A JS post-filter would parse better
+// but would make page counts wrong.
+const EXPERIENCE_CAP = 15;
+function experiencePatterns(n: number): string[] {
+  return [
+    `% ${n}+ year%`, `% ${n}+ yr%`, `% ${n}+year%`, `% ${n} year%`, `% ${n} yr%`,
+    `% ${n}-_ year%`, `% ${n}-__ year%`, `% ${n} - _ year%`, `% ${n}-_ yr%`, `% ${n} to _ year%`,
+  ];
+}
+
+function experienceCondition(min: number | undefined, max: number | undefined): SQL | undefined {
+  if (min === undefined && max === undefined) return undefined;
+  const lo = Math.min(min ?? 0, EXPERIENCE_CAP);
+  const hi = Math.min(max ?? EXPERIENCE_CAP, EXPERIENCE_CAP);
+  const text = sql`(${padded(sql`${jobs.title}`, EXPERIENCE_BREAKS)} || ${padded(sql`${jobs.description}`, EXPERIENCE_BREAKS)})`;
+  const clauses: SQL[] = [];
+  for (let n = lo; n <= hi; n++) {
+    for (const p of experiencePatterns(n)) clauses.push(sql`${text} LIKE ${p}`);
+  }
+  return clauses.length ? combine(clauses, "any") : sql`0`;
+}
+
+function companyNameMatches(names: string[]): SQL {
+  return combine(names.map((n) => sql`lower(COALESCE(${companies.name}, '')) LIKE ${`%${n}%`}`), "any");
+}
+
+type ConditionBuilder = (f: AdvancedFilter) => SQL | undefined;
+
+const ADVANCED_CONDITIONS: ConditionBuilder[] = [
+  (f) =>
+    f.excludeKeywords.length
+      ? sql`NOT ${combine(f.excludeKeywords.map((k) => anyFieldContains(["title", "description", "company"], k, f.exactWord)), "any")}`
+      : undefined,
+  (f) => (f.includeCompanies.length ? companyNameMatches(f.includeCompanies) : undefined),
+  (f) => (f.excludeCompanies.length ? sql`NOT ${companyNameMatches(f.excludeCompanies)}` : undefined),
+  (f) =>
+    f.employmentType.length
+      ? combine(
+          f.employmentType.flatMap((t) =>
+            [normalizeTerm(t), ...EMPLOYMENT_PATTERNS[t]].flatMap((p) => [
+              sql`${padded(sql`${jobs.employmentType}`, WORD_BREAKS)} LIKE ${`% ${p} %`}`,
+              sql`${padded(sql`${jobs.title}`, WORD_BREAKS)} LIKE ${`% ${p} %`}`,
+            ])
+          ),
+          "any"
+        )
+      : undefined,
+  (f) => experienceCondition(f.experienceMin, f.experienceMax),
+  (f) => (f.salaryMin !== undefined ? sql`${SALARY_VALUE} >= ${f.salaryMin}` : undefined),
+  (f) => (f.hasSalary ? sql`${SALARY_VALUE} IS NOT NULL` : undefined),
+  (f) => {
+    if (!f.country.length) return undefined;
+    const loc = sql`${jobs.locationJson}`;
+    const place = sql`lower(COALESCE(${jsonField(loc, "$.country")}, '') || ' ' || COALESCE(${jsonField(loc, "$.city")}, '') || ' ' || COALESCE(${jsonField(loc, "$.state")}, ''))`;
+    return combine(f.country.map((c) => sql`${place} LIKE ${`%${c}%`}`), "any");
+  },
+  (f) => {
+    if (!f.visaSponsorship) return undefined;
+    const d = sql`lower(${jobs.description})`;
+    const pos = combine(VISA_POSITIVE.map((p) => sql`${d} LIKE ${p}`), "any");
+    const neg = combine(VISA_NEGATIVE.map((p) => sql`${d} LIKE ${p}`), "any");
+    return sql`(${pos} AND NOT ${neg})`;
+  },
+  (f) =>
+    f.companySize.length
+      ? combine(f.companySize.map((s) => sql`lower(COALESCE(${companies.size}, '')) LIKE ${`%${s}%`}`), "any")
+      : undefined,
+  (f) =>
+    f.companyType.length
+      ? combine(f.companyType.map((t) => sql`lower(COALESCE(${companies.companyType}, '')) LIKE ${`%${t}%`}`), "any")
+      : undefined,
+  (f) => (f.postedAfter ? sql`COALESCE(${jobs.postedAt}, ${jobs.firstSeenAt}) >= ${f.postedAfter.getTime()}` : undefined),
+];
+
+function buildAdvancedConditions(f: AdvancedFilter): SQL[] {
+  return ADVANCED_CONDITIONS.map((build) => build(f)).filter((c): c is SQL => c !== undefined);
+}
+
+const FACET_LIMIT = 15;
+const FACET_EXPRESSIONS = {
+  ats: sql`lower(COALESCE(${jobs.ats}, ${companies.ats}, ${jobs.sourceType}))`,
+  employmentType: sql`lower(${jobs.employmentType})`,
+  country: jsonField(sql`${jobs.locationJson}`, "$.country"),
+  company: sql`${companies.name}`,
+} as const;
+type FacetKey = keyof typeof FACET_EXPRESSIONS;
+type Facets = Record<FacetKey, Array<{ value: string; count: number }>>;
 
 // GET /api/jobs
 jobsRouter.get("/", async (req, res, next) => {
@@ -71,69 +271,27 @@ jobsRouter.get("/", async (req, res, next) => {
       conditions.push(eq(jobs.sourceType, filter.sourceType));
     }
 
-    // 1. Keyword Multi-Search: supports comma-separated (e.g. "software engineer, backend, intern")
-    if (filter.search && filter.search.trim()) {
-      const rawTerms = filter.search
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-
-      if (rawTerms.length > 0) {
-        const termConditions = rawTerms.map((term) => {
-          const exactLike = `%${term}%`;
-          const words = term.split(/\s+/).filter((w) => w.length > 1);
-          if (words.length > 1) {
-            const wordLikes = words.map((w) => `%${w}%`);
-            return sql`(
-              lower(${jobs.title}) LIKE ${exactLike} OR
-              lower(${jobs.normalizedTitle}) LIKE ${exactLike} OR
-              lower(${companies.name}) LIKE ${exactLike} OR
-              lower(${jobs.skills}) LIKE ${exactLike} OR
-              lower(${jobs.description}) LIKE ${exactLike} OR
-              (${sql.join(
-                wordLikes.map(
-                  (w) =>
-                    sql`(lower(${jobs.title}) LIKE ${w} OR lower(${jobs.skills}) LIKE ${w} OR lower(${companies.name}) LIKE ${w})`
-                ),
-                sql` AND `
-              )})
-            )`;
-          }
-
-          return sql`(
-            lower(${jobs.title}) LIKE ${exactLike} OR
-            lower(${jobs.normalizedTitle}) LIKE ${exactLike} OR
-            lower(${companies.name}) LIKE ${exactLike} OR
-            lower(${jobs.skills}) LIKE ${exactLike} OR
-            lower(${jobs.description}) LIKE ${exactLike}
-          )`;
-        });
-
-        conditions.push(sql`(${sql.join(termConditions, sql` OR `)})`);
-      }
+    // 1. Keyword Multi-Search: comma-separated terms, OR by default, AND with searchMode=all
+    const searchTerms = splitTerms(filter.search);
+    if (searchTerms.length > 0) {
+      const fields: TextField[] = filter.titleOnly
+        ? ["title", "normalizedTitle"]
+        : ["title", "normalizedTitle", "company", "skills", "description"];
+      conditions.push(combine(searchTerms.map((t) => termMatch(t, fields, filter.exactWord)), filter.searchMode));
     }
 
-    // 2. Role / Specialization Multi-Filter: supports comma-separated (e.g. "Backend, Frontend, Full Stack")
-    const roleParam = filter.specialization || filter.role;
-    if (roleParam && roleParam.trim()) {
-      const rawRoles = roleParam
-        .split(",")
-        .map((r) => r.trim().toLowerCase())
-        .filter(Boolean);
-
-      if (rawRoles.length > 0) {
-        const roleConditions = rawRoles.map((role) => {
-          const roleLike = `%${role}%`;
-          return sql`(
-            lower(${jobs.normalizedTitle}) LIKE ${roleLike} OR
-            lower(${jobs.title}) LIKE ${roleLike} OR
-            lower(${jobs.skills}) LIKE ${roleLike} OR
-            lower(${jobs.description}) LIKE ${roleLike}
-          )`;
-        });
-        conditions.push(sql`(${sql.join(roleConditions, sql` OR `)})`);
-      }
+    // 2. Role / Specialization: title-ish fields only; descriptions mention many roles in passing
+    const roleTerms = splitTerms(filter.specialization || filter.role);
+    if (roleTerms.length > 0) {
+      const fields: TextField[] = filter.titleOnly
+        ? ["title", "normalizedTitle"]
+        : filter.includeDescription
+          ? ["title", "normalizedTitle", "skills", "description"]
+          : ["title", "normalizedTitle", "skills"];
+      conditions.push(combine(roleTerms.map((t) => anyFieldContains(fields, t, filter.exactWord)), "any"));
     }
+
+    conditions.push(...buildAdvancedConditions(filter));
 
     // 3. Location Multi-Filter: supports comma-separated (e.g. "Bengaluru, Remote, Chennai")
     if (filter.location && filter.location.trim()) {
@@ -236,7 +394,7 @@ jobsRouter.get("/", async (req, res, next) => {
           const skLike = `%${sk}%`;
           return sql`(lower(${jobs.skills}) LIKE ${skLike} OR lower(${jobs.description}) LIKE ${skLike})`;
         });
-        conditions.push(sql`(${sql.join(skillClauses, sql` OR `)})`);
+        conditions.push(combine(skillClauses, filter.skillsMode));
       }
     }
 
@@ -329,23 +487,30 @@ jobsRouter.get("/", async (req, res, next) => {
     // Sorting
     const sortField = filter.sortBy || filter.sort || "newest";
     const isAsc = filter.sortOrder === "asc";
-    let orderClause = desc(jobs.postedAt);
+    let orderClause: SQL[] = [desc(jobs.postedAt)];
 
     if (sortField === "score" || sortField === "matchScore" || sortField === "best_match") {
-      orderClause = isAsc ? asc(sql`COALESCE(${jobMatches.overallScore}, 75)`) : desc(sql`COALESCE(${jobMatches.overallScore}, 75)`);
+      orderClause = [isAsc ? asc(sql`COALESCE(${jobMatches.overallScore}, 75)`) : desc(sql`COALESCE(${jobMatches.overallScore}, 75)`)];
     } else if (sortField === "newest" || sortField === "postedAt") {
-      orderClause = isAsc ? asc(jobs.postedAt) : desc(jobs.postedAt);
+      orderClause = [isAsc ? asc(jobs.postedAt) : desc(jobs.postedAt)];
     } else if (sortField === "company") {
-      orderClause = isAsc ? asc(companies.name) : desc(companies.name);
+      orderClause = [isAsc ? asc(companies.name) : desc(companies.name)];
     } else if (sortField === "freshness") {
-      orderClause = isAsc ? asc(jobs.lastVerifiedAt) : desc(jobs.lastVerifiedAt);
+      orderClause = [isAsc ? asc(jobs.lastVerifiedAt) : desc(jobs.lastVerifiedAt)];
+    } else if (sortField === "salary") {
+      // Jobs without salary go last in either direction.
+      orderClause = [asc(sql`${SALARY_VALUE} IS NULL`), isAsc ? asc(SALARY_VALUE) : desc(SALARY_VALUE), desc(jobs.postedAt)];
+    } else if (sortField === "relevance" && searchTerms.length > 0) {
+      const inTitle = combine(searchTerms.map((t) => anyFieldContains(["title", "normalizedTitle"], t, filter.exactWord)), "any");
+      const inMeta = combine(searchTerms.map((t) => anyFieldContains(["skills", "company"], t, filter.exactWord)), "any");
+      orderClause = [asc(sql`CASE WHEN ${inTitle} THEN 0 WHEN ${inMeta} THEN 1 ELSE 2 END`), desc(jobs.postedAt)];
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const result = await query
       .where(whereClause)
-      .orderBy(orderClause)
+      .orderBy(...orderClause)
       .limit(filter.limit)
       .offset(offset);
 
@@ -364,6 +529,32 @@ jobsRouter.get("/", async (req, res, next) => {
 
     const countResult = whereClause ? await countQuery.where(whereClause) : await countQuery;
     const totalCount = Number(countResult[0]?.count ?? 0);
+
+    let facets: Facets | undefined;
+    if (filter.facets) {
+      const entries = await Promise.all(
+        (Object.keys(FACET_EXPRESSIONS) as FacetKey[]).map(async (key) => {
+          const expr = FACET_EXPRESSIONS[key];
+          const rows = await db
+            .select({ value: sql<string>`${expr}`, count: sql<number>`count(DISTINCT ${jobs.id})` })
+            .from(jobs)
+            .leftJoin(companies, eq(jobs.companyId, companies.id))
+            .leftJoin(
+              jobMatches,
+              and(
+                eq(jobMatches.jobId, jobs.id),
+                filter.resumeId ? eq(jobMatches.resumeId, filter.resumeId) : sql`1=1`
+              )
+            )
+            .where(and(whereClause, sql`${expr} IS NOT NULL AND ${expr} != ''`))
+            .groupBy(expr)
+            .orderBy(desc(sql`count(DISTINCT ${jobs.id})`))
+            .limit(FACET_LIMIT);
+          return [key, rows.map((r) => ({ value: String(r.value), count: Number(r.count) }))] as const;
+        })
+      );
+      facets = Object.fromEntries(entries) as Facets;
+    }
 
     // Load active resume skills for dynamic matching
     const activeResumeRows = await db
@@ -479,6 +670,7 @@ jobsRouter.get("/", async (req, res, next) => {
         limit: filter.limit,
         pages: Math.max(1, Math.ceil(totalCount / filter.limit)),
       },
+      ...(facets ? { facets } : {}),
     });
   } catch (err) {
     next(err);

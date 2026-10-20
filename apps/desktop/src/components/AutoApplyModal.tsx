@@ -830,7 +830,7 @@ export const AutoApplyModal: React.FC<AutoApplyModalProps> = ({
                 Application Crawler Encountered an Issue
               </h3>
               <p style={{ fontSize: "12.5px", color: "var(--accent-rose)", maxWidth: "500px", marginBottom: "16px" }}>
-                {result?.error || logs[logs.length - 1] || "Failed to automate job application form."}
+                {result?.error || result?.reason || logs[logs.length - 1] || "Failed to automate job application form."}
               </p>
               <button className="btn btn-secondary" onClick={() => setStep("configure")}>
                 Try Again

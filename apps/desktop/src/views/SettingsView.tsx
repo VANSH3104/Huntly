@@ -15,7 +15,7 @@ import {
 export const SettingsView: React.FC = () => {
   const [llmProvider, setLlmProvider] = useState("freellm");
   const [llmBaseUrl, setLlmBaseUrl] = useState("http://127.0.0.1:31415/v1");
-  const [llmApiKey, setLlmApiKey] = useState("freellmapi-7d5b7932a1658638deebf67ab9ea1b699448421afa3587da");
+  const [llmApiKey, setLlmApiKey] = useState("");
   const [llmModel, setLlmModel] = useState("auto");
   const [geminiKey, setGeminiKey] = useState("");
   const [searchProvider, setSearchProvider] = useState("serper");

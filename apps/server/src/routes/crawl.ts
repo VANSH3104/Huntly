@@ -9,8 +9,60 @@ import { detectATS } from "../crawler/career-discovery.js";
 import { getATSAdapter, extractATSSlug } from "../crawler/ats-adapters.js";
 import { processExtractedJob } from "../crawler/job-processor.js";
 import { socialAndYCScraper } from "../crawler/social-yc-scraper.js";
+import { BOARDS, runBoards, crawlLive, type LiveEvent } from "../crawler/job-boards.js";
 
 export const crawlRouter = Router();
+
+// GET /api/crawl/boards — public job boards available for scraping
+crawlRouter.get("/boards", (_req, res) => {
+  res.json({
+    boards: Object.entries(BOARDS).map(([id, b]) => ({
+      id, label: b.label, enabled: b.enabled, ...(b.needsKey ? { needsKey: true, envVars: b.needsKey } : {}),
+    })),
+  });
+});
+
+// POST /api/crawl/boards — scrape public job boards + company ATS sweeps and ingest results
+crawlRouter.post("/boards", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      keywords: z.string().trim().optional(),
+      boards: z.array(z.enum(Object.keys(BOARDS) as [string, ...string[]])).optional(),
+      limit: z.coerce.number().int().min(1).max(5000).optional().default(200),
+    });
+    const { keywords, boards, limit } = schema.parse(req.body ?? {});
+
+    const perBoard = await runBoards({ keywords: keywords || undefined, boards, limit });
+
+    res.json({
+      success: true,
+      scraped: perBoard.reduce((n, b) => n + b.fetched, 0),
+      added: perBoard.reduce((n, b) => n + b.added, 0),
+      updated: perBoard.reduce((n, b) => n + b.updated, 0),
+      perBoard: perBoard.map(({ board, fetched, added, error }) => ({ board, fetched, added, ...(error ? { error } : {}) })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/crawl/live — SSE stream of board scraping progress (board_start, job_added, board_done, error)
+crawlRouter.get("/live", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const onEvent = (evt: LiveEvent) => res.write(`data: ${JSON.stringify(evt)}\n\n`);
+  crawlLive.on("event", onEvent);
+  // Proxies and browsers drop idle event streams; a comment line keeps it open.
+  const ping = setInterval(() => res.write(":ping\n\n"), 20_000);
+
+  req.on("close", () => {
+    clearInterval(ping);
+    crawlLive.off("event", onEvent);
+  });
+});
 
 // GET /api/crawl/runs — recent crawl runs
 crawlRouter.get("/runs", async (_req, res, next) => {

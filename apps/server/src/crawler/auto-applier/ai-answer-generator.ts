@@ -80,8 +80,12 @@ export class AIAnswerGenerator {
     jobDescription: string;
     profile: ApplicantProfile;
     options?: string[];
+    resumeContext?: string;
   }): Promise<string> {
-    const { question, jobTitle, company, jobDescription, profile, options } = params;
+    const { question, jobTitle, company, jobDescription, profile, options, resumeContext } = params;
+    const resumeBlock = resumeContext
+      ? `\nCandidate resume (the only source of facts about the candidate):\n${resumeContext}\n`
+      : "";
 
     // 1. Check persistent memory
     const remembered = await this.getRememberedAnswer(question);
@@ -134,6 +138,7 @@ ${options.map((opt, i) => `${i + 1}. ${opt}`).join("\n")}
 
 Job description snippet:
 ${jobDescription.slice(0, 500)}
+${resumeBlock}
 
 Candidate Profile:
 - Name: ${profile.fullName}
@@ -146,11 +151,13 @@ Select ONLY the single best option matching the candidate. Return EXACTLY the te
         const aiResponse = await geminiService.generateText(prompt);
         const cleaned = aiResponse.trim().replace(/^[\d\.\-\s]+/, "").trim();
         const matched = options.find((o) => o.toLowerCase() === cleaned.toLowerCase() || o.toLowerCase().includes(cleaned.toLowerCase()));
-        const finalOption = matched || cleaned || options[0]!;
+        const finalOption = matched;
+        if (!finalOption) return "";
         await this.saveRememberedAnswer(question, finalOption);
         return finalOption;
-      } catch {
-        return options[0]!;
+      } catch (err) {
+        console.warn("[AIAnswerGenerator] Option pick failed:", err instanceof Error ? err.message : err);
+        return "";
       }
     }
 
@@ -161,13 +168,18 @@ Role: ${jobTitle} at ${company}
 Question: "${question}"
 
 Candidate Details:
+- Location: ${profile.location || "not specified"}
 - Current: ${profile.currentTitle || "Software Engineer"} at ${profile.currentCompany || "Technology"}
 - Years Experience: ${profile.yearsOfExperience}
 - Skills & Background: Strong software development, problem solving, fullstack & backend engineering
 
+${resumeBlock}
 Instructions:
+- Ground every claim in the resume above. Never invent employers, degrees, dates or numbers.
 - Write a direct, compelling response in first-person ("I").
 - Keep it between 2 to 4 sentences maximum (suitable for a text area field).
+- Never write bracketed placeholders such as [City]. If a detail is unknown, answer with what is known.
+- Match the length to the question: a one-line question gets one short sentence.
 - Do not use cheesy clichés or greetings. Answer the question directly with confidence and relevant specifics.`;
 
     try {
@@ -175,9 +187,9 @@ Instructions:
       const answer = response.trim().replace(/^"/, "").replace(/"$/, "");
       await this.saveRememberedAnswer(question, answer);
       return answer;
-    } catch {
-      const fallback = `I am excited about the opportunity at ${company} as a ${jobTitle}. My technical background and passion for building scalable software align strongly with the role requirements.`;
-      return fallback;
+    } catch (err) {
+      console.warn("[AIAnswerGenerator] Answer generation failed:", err instanceof Error ? err.message : err);
+      return "";
     }
   }
 }

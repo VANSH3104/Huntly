@@ -209,7 +209,7 @@ export const aiAnalyses = sqliteTable("ai_analyses", {
 // ═══════════════════════════════════════════════════════════════
 export const applications = sqliteTable("applications", {
   id: text("id").primaryKey(),
-  jobId: text("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  jobId: text("job_id").notNull().unique().references(() => jobs.id, { onDelete: "cascade" }),
   resumeVersionId: text("resume_version_id").references(() => resumes.id, { onDelete: "set null" }),
   status: text("status").notNull().default("saved"),
   appliedAt: integer("applied_at", { mode: "timestamp_ms" }),
@@ -217,6 +217,28 @@ export const applications = sqliteTable("applications", {
   nextAction: text("next_action"),
   deadline: integer("deadline", { mode: "timestamp_ms" }),
   ...timestamps,
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Auto-Apply Queue (one row per job, so a job can never be queued twice)
+// ═══════════════════════════════════════════════════════════════
+export const applyQueue = sqliteTable("apply_queue", {
+  id: text("id").primaryKey(),
+  jobId: text("job_id").notNull().unique().references(() => jobs.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("queued"), // queued | running | needs_review | submitted | failed
+  mode: text("mode").notNull().default("auto_submit"),
+  resumeId: text("resume_id"),
+  attempts: integer("attempts").notNull().default(0),
+  ats: text("ats"),
+  reason: text("reason"),
+  screenshot: text("screenshot"),
+  fieldsJson: text("fields_json").notNull().default("[]"),
+  unfilledJson: text("unfilled_json").notNull().default("[]"),
+  logsJson: text("logs_json").notNull().default("[]"),
+  queuedAt: integer("queued_at", { mode: "timestamp_ms" }).notNull().default(sql`(unixepoch('now') * 1000)`),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }),
+  finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().default(sql`(unixepoch('now') * 1000)`),
 });
 
 // ═══════════════════════════════════════════════════════════════
