@@ -5,18 +5,17 @@
       (function() {
         try {
           var saved = localStorage.getItem('agentforge-theme');
-          var theme = (saved && saved !== 'golden-summer') ? saved : 'soft-sand';
+          var themes = ['soft-sand','ocean','forest','pastel-dreamland','dark','midnight'];
+          var theme = themes.indexOf(saved) >= 0 ? saved : 'soft-sand';
           document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {}
       })();
     </script>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="AgentForge — AI-powered Job Intelligence OS for software engineers" />
-    <title>AgentForge — Job Intelligence</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <meta name="description" content="AgentForge: open-source job intelligence for software engineers" />
+    <title>AgentForge</title>
   </head>
   <body>
     <div id="root"></div>
