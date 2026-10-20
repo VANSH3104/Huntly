@@ -1,263 +1,302 @@
 import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { Activity, CheckCircle2, Globe, Loader2, Radar, RefreshCw, Search, XCircle } from "lucide-react";
 import { api } from "../lib/api";
 import { Badge } from "../components/common/Badge";
 import {
-  Compass,
-  Globe,
-  Flame,
-  Search,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw,
-  ExternalLink,
-  Layers,
-  ArrowRight,
-  ShieldCheck,
-} from "lucide-react";
+  EventTimeline,
+  PageContainer,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  listContainer,
+  listItem,
+} from "../components/common/PagePrimitives";
+import { toast, errorMessage } from "@/lib/notify";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { cn } from "@/lib/utils";
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function looksLikeUrl(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  return /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(v);
+}
 
 export const DiscoveryView: React.FC = () => {
   const queryClient = useQueryClient();
   const [probeUrl, setProbeUrl] = useState("");
+  const [touched, setTouched] = useState(false);
   const [probeResult, setProbeResult] = useState<any>(null);
-  const [isProbing, setIsProbing] = useState(false);
 
   const { data: sources, isLoading: isSourcesLoading } = useQuery({
     queryKey: ["sources"],
     queryFn: () => api.sources.list(),
   });
 
-  const { data: events } = useQuery({
-    queryKey: ["crawl", "events"],
+  const { data: events, isLoading: isEventsLoading } = useQuery({
+    queryKey: ["crawl", "events", 30],
     queryFn: () => api.crawl.events(30),
     refetchInterval: 4000,
   });
 
-  const handleProbe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!probeUrl.trim()) return;
-
-    setIsProbing(true);
-    setProbeResult(null);
-    try {
-      const res = await api.crawl.probeUrl(probeUrl.trim());
+  const probe = useMutation({
+    mutationFn: (url: string) => api.crawl.probeUrl(url),
+    onMutate: () => setProbeResult(null),
+    onSuccess: (res) => {
       setProbeResult(res);
       queryClient.invalidateQueries({ queryKey: ["sources"] });
-    } catch (err: any) {
-      setProbeResult({ error: err.message || "Failed to probe domain" });
-    } finally {
-      setIsProbing(false);
-    }
+      toast.success(`Discovered ${res?.companyName || "career page"}`, {
+        description: `${res?.jobsFound ?? 0} jobs extracted via ${res?.ats || "the direct web parser"}.`,
+      });
+    },
+    onError: (err) => {
+      setProbeResult({ error: errorMessage(err, "The domain could not be probed") });
+      toast.error("Probe failed", { description: errorMessage(err) });
+    },
+  });
+
+  const crawlSource = useMutation({
+    mutationFn: (source: any) => api.sources.triggerCrawl(source.id),
+    onSuccess: (_res, source) => {
+      toast.success("Crawl queued", { description: `${source.company?.name || hostOf(source.url)} will be re-crawled shortly.` });
+      queryClient.invalidateQueries({ queryKey: ["sources"] });
+    },
+    onError: (err) => toast.error("Could not start crawl", { description: errorMessage(err) }),
+  });
+
+  const urlInvalid = touched && probeUrl.trim() !== "" && !looksLikeUrl(probeUrl);
+
+  const handleProbe = (e: React.FormEvent) => {
+    e.preventDefault();
+    setTouched(true);
+    if (!looksLikeUrl(probeUrl)) return;
+    probe.mutate(probeUrl.trim());
   };
 
-  const handleCrawlSource = async (sourceId: string) => {
-    try {
-      await api.sources.triggerCrawl(sourceId);
-      alert("Triggered source crawl!");
-      queryClient.invalidateQueries({ queryKey: ["sources"] });
-    } catch (err: any) {
-      alert(`Error triggering crawl: ${err.message}`);
-    }
-  };
+  const list: any[] = sources ?? [];
 
   return (
-    <div className="page-container" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      {/* Top Banner / Probe Tool */}
-      <div
-        className="glass-panel"
-        style={{
-          padding: "24px",
-          backgroundColor: "var(--bg-card)",
-          border: "1px solid var(--border-subtle)",
-          boxShadow: "var(--shadow-sm)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-          <Compass size={20} color="var(--accent-indigo)" />
-          <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Career Page & ATS Discovery Probe</h2>
-        </div>
-        <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "16px", maxWidth: "680px" }}>
-          Enter any company website or ATS link (e.g. <code>stripe.com</code>, <code>figma.com</code>, or Greenhouse/Lever/Ashby URLs).
-          The engine scans robots.txt, common career endpoints, detects the ATS API, and extracts verified jobs.
-        </p>
-
-        <form onSubmit={handleProbe} style={{ display: "flex", gap: "10px", maxWidth: "600px" }}>
-          <input
-            type="text"
-            placeholder="https://company.com or career link"
-            value={probeUrl}
-            onChange={(e) => setProbeUrl(e.target.value)}
-            style={{ flex: 1, backgroundColor: "var(--bg-input)", color: "var(--text-primary)", border: "1px solid var(--border-subtle)" }}
-          />
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={isProbing}
-            style={{ whiteSpace: "nowrap" }}
-          >
-            {isProbing ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
-            <span>{isProbing ? "Probing..." : "Discover & Crawl"}</span>
-          </button>
-        </form>
-
-        {probeResult && (
-          <div
-            style={{
-              marginTop: "16px",
-              padding: "14px 18px",
-              borderRadius: "var(--radius-md)",
-              backgroundColor: probeResult.error ? "rgba(225, 29, 72, 0.08)" : "rgba(79, 70, 229, 0.08)",
-              border: `1px solid ${probeResult.error ? "rgba(225, 29, 72, 0.25)" : "rgba(79, 70, 229, 0.25)"}`,
-              fontSize: "13px",
-            }}
-          >
-            {probeResult.error ? (
-              <span style={{ color: "var(--accent-rose)" }}>Probe failed: {probeResult.error}</span>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span style={{ color: "var(--accent-indigo)", fontWeight: 600 }}>
-                  ✓ Discovered: {probeResult.companyName || "Company"} ({probeResult.jobsFound ?? 0} jobs extracted)
-                </span>
-                <span style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
-                  ATS: {probeResult.ats || "Direct Web Parser"} • Career URL: {probeResult.careerUrl || probeUrl}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Grid: Sources Table + Live Event Logs */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "24px" }}>
-        {/* Monitored Sources */}
-        <div className="glass-panel" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Globe size={18} color="var(--accent-indigo)" />
-              <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>Monitored ATS & Career Sources</h3>
+    <PageContainer className="flex flex-col gap-6">
+      <Panel>
+        <PanelHeader
+          icon={Radar}
+          title="Probe a career page"
+          description="Paste a company site or ATS link. The engine checks robots.txt and common career endpoints, detects the ATS, and extracts verified jobs."
+        />
+        <PanelBody>
+          <form onSubmit={handleProbe} className="flex max-w-2xl flex-col gap-1.5" noValidate>
+            <Label htmlFor="probe-url" className="sr-only">
+              Company website or career page URL
+            </Label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="probe-url"
+                type="url"
+                inputMode="url"
+                placeholder="stripe.com or https://jobs.lever.co/company"
+                value={probeUrl}
+                onChange={(e) => setProbeUrl(e.target.value)}
+                onBlur={() => setTouched(true)}
+                aria-invalid={urlInvalid || undefined}
+                aria-describedby="probe-url-help"
+                className="font-mono text-[13px]"
+              />
+              <Button type="submit" disabled={probe.isPending || !probeUrl.trim()}>
+                {probe.isPending ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Search data-icon="inline-start" />}
+                {probe.isPending ? "Probing…" : "Discover jobs"}
+              </Button>
             </div>
-            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              {sources?.length ?? 0} endpoints active
-            </span>
-          </div>
+            <p id="probe-url-help" className={cn("text-[12px]", urlInvalid ? "text-destructive" : "text-muted-foreground")}>
+              {urlInvalid
+                ? "Enter a domain like stripe.com or a full https:// link."
+                : "Works with Greenhouse, Lever, Ashby and most company career pages."}
+            </p>
+          </form>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-subtle)", textAlign: "left", color: "var(--text-muted)", fontSize: "11px" }}>
-                  <th style={{ padding: "8px 12px" }}>COMPANY / DOMAIN</th>
-                  <th style={{ padding: "8px 12px" }}>ATS SYSTEM</th>
-                  <th style={{ padding: "8px 12px" }}>JOBS DISCOVERED</th>
-                  <th style={{ padding: "8px 12px", textAlign: "right" }}>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isSourcesLoading ? (
-                  <tr>
-                    <td colSpan={4} style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>
-                      Loading sources...
-                    </td>
-                  </tr>
-                ) : sources && sources.length > 0 ? (
-                  sources.map((s: any) => (
-                    <tr
-                      key={s.id}
-                      style={{
-                        borderBottom: "1px solid var(--border-subtle)",
-                        transition: "background 0.15s ease",
-                      }}
-                    >
-                      <td style={{ padding: "12px" }}>
-                        <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{s.companyName || s.name || "Target"}</div>
-                        <div style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                          {s.url}
-                        </div>
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <Badge variant="cyan">{s.ats?.toUpperCase() || "DIRECT"}</Badge>
-                      </td>
-                      <td style={{ padding: "12px", fontFamily: "var(--font-mono)", color: "var(--accent-emerald)" }}>
-                        {s.lastJobCount ?? 0}
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "right" }}>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: "4px 8px", fontSize: "11px" }}
-                          onClick={() => handleCrawlSource(s.id)}
-                        >
-                          Crawl Now
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>
-                      No sources added yet. Use the probe above to add official company career pages.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Live Crawl Event Stream */}
-        <div className="glass-panel" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Layers size={18} color="var(--accent-emerald)" />
-            <h3 style={{ fontSize: "15px", fontWeight: 600 }}>Crawl Worker Activity</h3>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              maxHeight: "420px",
-              overflowY: "auto",
-            }}
-          >
-            {events && events.length > 0 ? (
-              events.map((ev: any, idx: number) => (
-                <div
-                  key={ev.id || idx}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: "var(--radius-sm)",
-                    backgroundColor: "rgba(255, 255, 255, 0.02)",
-                    border: "1px solid var(--border-subtle)",
-                    fontSize: "12px",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "10px",
-                        color: ev.severity === "error" ? "var(--accent-rose)" : "var(--accent-cyan)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {ev.type || "CRAWL_INFO"}
-                    </span>
-                    <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
-                      {ev.createdAt ? new Date(ev.createdAt).toLocaleTimeString() : "Just now"}
-                    </span>
-                  </div>
-                  <div style={{ color: "var(--text-secondary)", fontSize: "11px", wordBreak: "break-word" }}>
-                    {ev.message}
-                  </div>
+          {probeResult && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              role="status"
+              className={cn(
+                "flex max-w-2xl items-start gap-3 rounded-lg border p-3.5 text-[13px]",
+                probeResult.error
+                  ? "border-[color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--danger)_7%,transparent)]"
+                  : "border-[var(--brand-line)] bg-[var(--brand-soft)]"
+              )}
+            >
+              {probeResult.error ? (
+                <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+              ) : (
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+              )}
+              {probeResult.error ? (
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-medium text-foreground">Probe failed</span>
+                  <span className="text-muted-foreground">{probeResult.error}</span>
                 </div>
-              ))
+              ) : (
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-medium text-foreground">
+                    {probeResult.companyName || "Company"} ·{" "}
+                    <span className="tabular-nums">{probeResult.jobsFound ?? 0}</span> jobs extracted
+                  </span>
+                  <span className="truncate text-[12px] text-muted-foreground">
+                    {probeResult.ats || "Direct web parser"} · {probeResult.careerUrl || probeUrl}
+                  </span>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </PanelBody>
+      </Panel>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <Panel>
+          <PanelHeader
+            icon={Globe}
+            title="Monitored sources"
+            description="Career pages and ATS boards the crawler revisits on a schedule"
+            action={
+              <span className="text-[12.5px] tabular-nums text-muted-foreground">
+                {list.length} active
+              </span>
+            }
+          />
+          <PanelBody className="px-2 pb-2">
+            {isSourcesLoading ? (
+              <div className="flex flex-col gap-3 px-3 py-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <div className="flex flex-1 flex-col gap-1.5">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-64" />
+                    </div>
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                ))}
+              </div>
+            ) : list.length === 0 ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Globe />
+                  </EmptyMedia>
+                  <EmptyTitle>No sources yet</EmptyTitle>
+                  <EmptyDescription>Probe a company career page above to start monitoring it.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
-              <div style={{ padding: "32px", textAlign: "center", color: "var(--text-muted)", fontSize: "12px" }}>
-                Worker idle. Logs appear when queries or probes run.
+              <div className="max-h-[560px] overflow-auto">
+                <table className="w-full table-fixed border-collapse text-[13px]">
+                  <thead className="sticky top-0 z-[1] bg-card">
+                    <tr className="border-b border-border text-left">
+                      <th scope="col" className="px-3 py-2.5 text-[12px] font-medium text-muted-foreground">Company</th>
+                      <th scope="col" className="w-36 px-3 py-2.5 text-[12px] font-medium text-muted-foreground">Platform</th>
+                      <th scope="col" className="w-20 px-3 py-2.5 text-right text-[12px] font-medium text-muted-foreground">Jobs</th>
+                      <th scope="col" className="w-28 px-3 py-2.5">
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <motion.tbody variants={listContainer} initial="hidden" animate="show">
+                    {list.map((s, i) => {
+                      const name = s.company?.name || s.companyName || s.name || hostOf(s.url);
+                      const pending = crawlSource.isPending && crawlSource.variables?.id === s.id;
+                      return (
+                        <motion.tr
+                          key={s.id}
+                          variants={listItem}
+                          custom={i}
+                          className="border-b border-border transition-colors last:border-0 hover:bg-[var(--bg-card-hover)]"
+                        >
+                          <td className="px-3 py-2.5">
+                            <div className="truncate font-medium text-foreground">{name}</div>
+                            <a
+                              href={s.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block truncate font-mono text-[11px] text-muted-foreground hover:text-primary"
+                            >
+                              {s.url.replace(/^https?:\/\//, "")}
+                            </a>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <Badge variant={s.ats ? "cyan" : "muted"} className="capitalize">
+                              {s.ats || "direct"}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-foreground">
+                            {(s.lastJobCount ?? 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2.5 text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => crawlSource.mutate(s)}
+                              disabled={pending}
+                              aria-label={`Crawl ${name} now`}
+                            >
+                              <RefreshCw className={cn(pending && "animate-spin")} data-icon="inline-start" />
+                              Crawl
+                            </Button>
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </motion.tbody>
+                </table>
               </div>
             )}
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
+
+        <Panel>
+          <PanelHeader
+            icon={Activity}
+            title="Worker activity"
+            description="Most recent crawl events"
+          />
+          <PanelBody className="max-h-[620px] overflow-y-auto pt-3">
+            {isEventsLoading ? (
+              <div className="flex flex-col gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex flex-col gap-1.5">
+                    <Skeleton className="h-3 w-1/3" />
+                    <Skeleton className="h-3 w-5/6" />
+                  </div>
+                ))}
+              </div>
+            ) : (events ?? []).length > 0 ? (
+              <EventTimeline events={events ?? []} />
+            ) : (
+              <Empty className="p-6">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Activity />
+                  </EmptyMedia>
+                  <EmptyTitle>Worker idle</EmptyTitle>
+                  <EmptyDescription>Logs appear when queries or probes run.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            )}
+          </PanelBody>
+        </Panel>
       </div>
-    </div>
+    </PageContainer>
   );
 };
