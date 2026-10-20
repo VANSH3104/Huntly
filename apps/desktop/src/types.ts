@@ -18,7 +18,6 @@ export type NavTab =
   | "discovery"
   | "resume"
   | "analytics"
-  | "sandbox"
   | "settings";
 
 export interface JobWithMatch extends Job {
