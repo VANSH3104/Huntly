@@ -103,6 +103,50 @@ resumesRouter.post("/", async (req, res, next) => {
   }
 });
 
+// PATCH /api/resumes/:id (rename and/or replace the LaTeX source in place)
+resumesRouter.patch("/:id", async (req, res, next) => {
+  try {
+    const schema = z
+      .object({
+        name: z.string().trim().min(1).optional(),
+        latex: z.string().min(10).optional(),
+      })
+      .refine((v) => v.name !== undefined || v.latex !== undefined, { message: "Nothing to update" });
+    const { name, latex } = schema.parse(req.body);
+    const id = req.params["id"]!;
+
+    const db = getDatabase();
+    const [existing] = await db.select().from(resumes).where(eq(resumes.id, id)).limit(1);
+    if (!existing) return res.status(404).json({ error: "Resume not found" });
+
+    const patch: Partial<typeof resumes.$inferInsert> = {};
+    if (name !== undefined) patch.name = name;
+
+    let parsed = existing.parsedJson ? JSON.parse(existing.parsedJson) : null;
+    if (latex !== undefined && latex !== existing.latex) {
+      parsed = await new ResumeParser().parse(latex);
+      patch.latex = latex;
+      patch.parsedJson = JSON.stringify(parsed);
+      patch.hash = crypto.createHash("sha256").update(latex).digest("hex");
+
+      await db.delete(resumeSkills).where(eq(resumeSkills.resumeId, id));
+      const canonicalSkills = new SkillNormalizer().normalizeAll(parsed.skills ?? []);
+      for (const { raw, canonical } of canonicalSkills) {
+        await db.insert(resumeSkills).values({ id: uuidv4(), resumeId: id, skill: raw, canonical });
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await db.update(resumes).set(patch).where(eq(resumes.id, id));
+    }
+
+    const [updated] = await db.select().from(resumes).where(eq(resumes.id, id)).limit(1);
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /api/resumes/:id
 resumesRouter.delete("/:id", async (req, res, next) => {
   try {
@@ -133,7 +177,7 @@ resumesRouter.get("/download-active", async (_req, res, next) => {
     const [active] = await db.select().from(resumes).where(eq(resumes.isActive, true)).limit(1);
     if (!active) return res.status(400).json({ error: "No active resume found to download" });
 
-    let candidateName = "vansh";
+    let candidateName = "candidate";
     if (active.parsedJson) {
       try {
         const parsed = JSON.parse(active.parsedJson);
@@ -171,7 +215,7 @@ resumesRouter.post("/compile", async (req, res, next) => {
 
     const db = getDatabase();
     let sourceLatex = latex;
-    let candidateName = "vansh";
+    let candidateName = "candidate";
 
     if (!sourceLatex) {
       let targetId = resumeId;
@@ -203,6 +247,7 @@ resumesRouter.post("/compile", async (req, res, next) => {
       filename: result.filename,
       pdfBase64: result.pdfBase64,
       error: result.error,
+      log: result.log,
     });
   } catch (err) {
     next(err);
