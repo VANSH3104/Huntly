@@ -6,7 +6,7 @@ node_modules
 *.db
 *.db-shm
 *.db-wal
-agentforge.db*
+huntly.db*
 autoapply-files
 dist
 apps/*/dist

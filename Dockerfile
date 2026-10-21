@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for AgentForge
+# Multi-stage Dockerfile for Huntly
 FROM mcr.microsoft.com/playwright:v1.48.0-noble AS builder
 
 WORKDIR /app
