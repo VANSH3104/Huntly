@@ -275,9 +275,14 @@ autoApplyRouter.put("/config", async (req: Request, res: Response, next: NextFun
 
 // GET /api/auto-apply/screenshot/:filename — stream screenshot
 autoApplyRouter.get("/screenshot/:filename", (req: Request, res: Response) => {
-  const rawParam = req.params.filename;
-  const filename = path.basename(typeof rawParam === "string" ? rawParam : "");
-  const filePath = path.join(os.tmpdir(), "agentforge-applications", filename);
+  const rawParam = req.params["filename"];
+  const filename = path.basename(Array.isArray(rawParam) ? rawParam[0] ?? "" : rawParam ?? "");
+  const candidateDirs = [
+    path.join(os.tmpdir(), "huntly-applications"),
+    path.join(os.tmpdir(), "agentforge-applications"),
+  ];
+  const foundDir = candidateDirs.find((d) => fs.existsSync(path.join(d, filename))) ?? candidateDirs[0]!;
+  const filePath = path.join(foundDir, filename);
 
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);

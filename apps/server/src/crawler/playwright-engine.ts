@@ -178,7 +178,7 @@ export class PlaywrightEngine {
     this.options = {
       headless: options.headless ?? true,
       debugSnapshots: options.debugSnapshots ?? false,
-      snapshotDir: options.snapshotDir ?? "/tmp/agentforge-snapshots",
+      snapshotDir: options.snapshotDir ?? "/tmp/huntly-snapshots",
       userAgent: options.userAgent ??
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       timeout: options.timeout ?? 30_000,

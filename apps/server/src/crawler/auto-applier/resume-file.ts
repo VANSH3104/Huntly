@@ -1,8 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/** The user's uploaded resume PDF lives next to the SQLite file, outside the source tree. */
-const dir = () => path.join(path.dirname(path.resolve(process.env["DATABASE_PATH"] ?? "./agentforge.db")), "autoapply-files");
+const dir = () => path.join(path.dirname(path.resolve(process.env["DATABASE_PATH"] ?? (fs.existsSync("./huntly.db") ? "./huntly.db" : "./agentforge.db"))), "autoapply-files");
 const file = () => path.join(dir(), "resume.pdf");
 
 export function getUploadedResume(): { path: string; size: number; updatedAt: number } | null {

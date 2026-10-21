@@ -135,7 +135,7 @@ export class LatexCompiler {
     }
     cleanFilename = cleanFilename.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-    const tmpDir = path.join(os.tmpdir(), `agentforge-latex-${uuidv4()}`);
+    const tmpDir = path.join(os.tmpdir(), `huntly-latex-${uuidv4()}`);
     fs.mkdirSync(tmpDir, { recursive: true });
 
     const texFilePath = path.join(tmpDir, "resume.tex");

@@ -36,7 +36,7 @@ export class AutoApplierEngine {
   private screenshotsDir: string;
 
   constructor() {
-    this.screenshotsDir = path.join(os.tmpdir(), "agentforge-applications");
+    this.screenshotsDir = path.join(os.tmpdir(), "huntly-applications");
     if (!fsSync.existsSync(this.screenshotsDir)) {
       fsSync.mkdirSync(this.screenshotsDir, { recursive: true, mode: 0o755 });
     }
