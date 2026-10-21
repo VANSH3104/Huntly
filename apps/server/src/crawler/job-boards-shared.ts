@@ -36,10 +36,14 @@ export interface BoardSource {
   fetch(opts: FetchOpts): Promise<BoardJob[]>;
   /** Env vars that must all be set; the board is listed but disabled without them. */
   needsKey?: readonly string[];
+  /** Env vars where ANY one being set enables the board. */
+  needsAnyKey?: readonly string[];
 }
 
 export function boardEnabled(source: BoardSource): boolean {
-  return !source.needsKey || source.needsKey.every(k => !!process.env[k]);
+  if (source.needsKey && !source.needsKey.every(k => !!process.env[k]?.trim())) return false;
+  if (source.needsAnyKey && !source.needsAnyKey.some(k => !!process.env[k]?.trim())) return false;
+  return true;
 }
 
 // ─── HTTP ───────────────────────────────────────────────────────
