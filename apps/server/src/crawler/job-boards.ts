@@ -9,15 +9,16 @@ import { v4 as uuidv4 } from "uuid";
 import { and, eq, or } from "drizzle-orm";
 import { getDatabase, jobs, companies, resumes } from "@huntly/database";
 import type { JobLocation } from "@huntly/shared";
-import { normalizeJobTitle, normalizeLocation, extractSkillsFromText, extractDomain } from "../utils/normalize.js";
+import { normalizeJobTitle, normalizeLocation, extractSkillsFromText, extractDomain, calculateRoleFingerprint } from "../utils/normalize.js";
 import { JobMatcher } from "../services/job-matcher.js";
 import { extractMetadataFromText } from "./social-yc-scraper.js";
 import {
   type BoardJob, type BoardSource, type FetchOpts, type Sweeper,
-  getJson, getText, decodeEntities, htmlToText, rssTag, toDate, positive, isRemoteText, remoteWithin,
+  getJson, postJson, getText, decodeEntities, htmlToText, rssTag, toDate, positive, isRemoteText, remoteWithin,
   keywordMatcher, nextPage, titleCaseSlug, mapPool, atsSweep, boardEnabled, countryFromCode, detectCountry, detectCity,
   normalizeEmploymentType, inferExperienceLevel, experienceFromYears, salaryFromText,
 } from "./job-boards-shared.js";
+import { getPlaywrightEngine } from "./playwright-engine.js";
 import { EXTRA_SOURCES } from "./job-boards-extra.js";
 import { HARD_BOARDS } from "./job-boards-hard.js";
 
@@ -306,7 +307,7 @@ async function fetchWorkingNomads(_opts: FetchOpts): Promise<BoardJob[]> {
 
 // ─── Company ATS sweeper ────────────────────────────────────────
 
-type SweepAts = "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters" | "recruitee";
+type SweepAts = "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters" | "recruitee" | "workday" | "bamboohr" | "breezy" | "rippling";
 
 // Verified live (non-empty boards) on 2026-10-19; a slug that later dies just yields [].
 export const ATS_COMPANY_SLUGS: Record<SweepAts, readonly string[]> = {
@@ -354,6 +355,13 @@ export const ATS_COMPANY_SLUGS: Record<SweepAts, readonly string[]> = {
     "Colliers", "SGS", "Primark", "DeliveryHero", "Thales", "Allegro", "KPN",
   ],
   recruitee: ["bunq", "channable", "vandebron", "fastned", "inshared", "funda", "greenchoice", "effectory"],
+  workday: [
+    "nvidia/NVIDIAExternalCareerSite", "adobe/external_experienced", "salesforce/External_Career_Site",
+    "target/targetcareers", "walmart/WalmartExternal", "dell/External",
+  ],
+  bamboohr: ["postman", "changeorg", "sourcegraph", "zapier", "hopin", "gumroad", "wrike"],
+  breezy: ["turing", "contra", "superhuman", "doximity", "hopin"],
+  rippling: ["anthropic", "perplexity", "dbt-labs", "brex", "checkr", "superhuman"],
 };
 
 // Lever and Ashby responses carry no company name, so slugs that don't title-case well are mapped.
@@ -372,6 +380,12 @@ const SLUG_NAMES: Record<string, string> = {
   customerio: "Customer.io", zoominfo: "ZoomInfo", fi: "Fi Money", sonarsource: "SonarSource", fly: "Fly.io",
   workos: "WorkOS", motherduck: "MotherDuck", clickhouse: "ClickHouse", llamaindex: "LlamaIndex", lancedb: "LanceDB",
   e2b: "E2B", sarvam: "Sarvam AI", runpod: "RunPod", neo4j: "Neo4j", yugabyte: "Yugabyte",
+  "nvidia/NVIDIAExternalCareerSite": "NVIDIA", "adobe/external_experienced": "Adobe",
+  "salesforce/External_Career_Site": "Salesforce", "target/targetcareers": "Target",
+  "walmart/WalmartExternal": "Walmart", "dell/External": "Dell Technologies",
+  postman: "Postman", changeorg: "Change.org", sourcegraph: "Sourcegraph", zapier: "Zapier",
+  hopin: "Hopin", gumroad: "Gumroad", wrike: "Wrike", turing: "Turing", contra: "Contra",
+  superhuman: "Superhuman", doximity: "Doximity", "dbt-labs": "dbt Labs", brex: "Brex",
 };
 
 function slugName(slug: string): string {
@@ -557,6 +571,227 @@ async function sweepRecruitee(slug: string): Promise<BoardJob[]> {
   }));
 }
 
+async function sweepWorkday(slug: string): Promise<BoardJob[]> {
+  const [tenant, site = "careers"] = slug.split("/");
+  if (!tenant) return [];
+  const endpoint = `https://${tenant}.wd1.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`;
+  try {
+    const data = await postJson<{
+      jobPostings?: Array<{
+        title: string; externalPath: string; locationsText?: string; postedOn?: string; bulletFields?: string[];
+      }>;
+    }>(endpoint, { appliedFacets: {}, limit: 25, offset: 0 });
+
+    return (data.jobPostings ?? []).map(j => {
+      const location = j.locationsText || "Unspecified";
+      const fullUrl = `https://${tenant}.wd1.myworkdayjobs.com/en-US/${site}${j.externalPath}`;
+      return {
+        board: "workday",
+        externalId: j.externalPath.replace(/^\//, ""),
+        title: j.title,
+        companyName: slugName(slug),
+        companyUrl: `https://${tenant}.wd1.myworkdayjobs.com/en-US/${site}`,
+        location,
+        remote: isRemoteText(location, j.title),
+        url: fullUrl,
+        description: j.bulletFields?.join(" · ") ?? "",
+        tags: [],
+        postedAt: toDate(j.postedOn),
+      };
+    });
+  } catch {
+    // Playwright browser fallback when HTTP endpoint is blocked
+    try {
+      const session = await getPlaywrightEngine().acquirePage(`${tenant}.wd1.myworkdayjobs.com`);
+      try {
+        const fullUrl = `https://${tenant}.wd1.myworkdayjobs.com/en-US/${site}`;
+        await session.page.goto(fullUrl, { timeout: 20000, waitUntil: "domcontentloaded" });
+        await session.page.waitForTimeout(2000);
+        const links = await session.page.$$eval('a[href*="/job/"]', (anchors: any[]) =>
+          anchors.map(a => ({ title: a.textContent?.trim(), href: a.href })).filter(x => x.title && x.href)
+        );
+        return links.slice(0, 25).map(l => ({
+          board: "workday",
+          externalId: l.href.split("/").pop() || l.href,
+          title: l.title || "Job Opening",
+          companyName: slugName(slug),
+          companyUrl: fullUrl,
+          location: "Unspecified",
+          remote: isRemoteText(l.title),
+          url: l.href,
+          description: "",
+          tags: [],
+        }));
+      } finally {
+        await session.release();
+      }
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function sweepBambooHR(slug: string): Promise<BoardJob[]> {
+  try {
+    const data = await getJson<{
+      result?: Array<{
+        id: string | number; jobOpeningName: string; location?: { city?: string; state?: string };
+        isRemote?: boolean; departmentLabel?: string;
+      }>;
+    }>(`https://${slug}.bamboohr.com/careers/list`);
+    return (data.result ?? []).map(j => {
+      const loc = [j.location?.city, j.location?.state].filter(Boolean).join(", ");
+      return {
+        board: "bamboohr",
+        externalId: String(j.id),
+        title: j.jobOpeningName,
+        companyName: slugName(slug),
+        companyUrl: `https://${slug}.bamboohr.com/careers`,
+        location: loc || (j.isRemote ? "Remote" : "Unspecified"),
+        remote: !!j.isRemote || isRemoteText(loc),
+        url: `https://${slug}.bamboohr.com/careers/${j.id}`,
+        description: j.departmentLabel || "",
+        tags: j.departmentLabel ? [j.departmentLabel] : [],
+      };
+    });
+  } catch {
+    try {
+      const session = await getPlaywrightEngine().acquirePage(`${slug}.bamboohr.com`);
+      try {
+        const fullUrl = `https://${slug}.bamboohr.com/careers`;
+        await session.page.goto(fullUrl, { timeout: 20000, waitUntil: "domcontentloaded" });
+        await session.page.waitForTimeout(2000);
+        const links = await session.page.$$eval('a[href*="/careers/"]', (anchors: any[]) =>
+          anchors.map(a => ({ title: a.textContent?.trim(), href: a.href })).filter(x => x.title && x.href)
+        );
+        return links.slice(0, 25).map(l => ({
+          board: "bamboohr",
+          externalId: l.href.split("/").pop() || l.href,
+          title: l.title || "Job Opening",
+          companyName: slugName(slug),
+          companyUrl: fullUrl,
+          location: "Unspecified",
+          remote: isRemoteText(l.title),
+          url: l.href,
+          description: "",
+          tags: [],
+        }));
+      } finally {
+        await session.release();
+      }
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function sweepBreezy(slug: string): Promise<BoardJob[]> {
+  try {
+    const data = await getJson<Array<{
+      id: string; name: string; url: string; department?: string;
+      location?: { name?: string; is_remote?: boolean }; published_date?: string; type?: { name?: string };
+    }>>(`https://${slug}.breezy.hr/json`);
+    return data.map(j => ({
+      board: "breezy",
+      externalId: j.id,
+      title: j.name,
+      companyName: slugName(slug),
+      companyUrl: `https://${slug}.breezy.hr`,
+      location: j.location?.name || (j.location?.is_remote ? "Remote" : "Unspecified"),
+      remote: !!j.location?.is_remote || isRemoteText(j.location?.name),
+      url: j.url,
+      description: [j.department, j.type?.name].filter(Boolean).join(" · "),
+      employmentType: j.type?.name,
+      tags: j.department ? [j.department] : [],
+      postedAt: toDate(j.published_date),
+    }));
+  } catch {
+    try {
+      const session = await getPlaywrightEngine().acquirePage(`${slug}.breezy.hr`);
+      try {
+        const fullUrl = `https://${slug}.breezy.hr`;
+        await session.page.goto(fullUrl, { timeout: 20000, waitUntil: "domcontentloaded" });
+        await session.page.waitForTimeout(2000);
+        const links = await session.page.$$eval('a[href*="/p/"]', (anchors: any[]) =>
+          anchors.map(a => ({ title: a.textContent?.trim(), href: a.href })).filter(x => x.title && x.href)
+        );
+        return links.slice(0, 25).map(l => ({
+          board: "breezy",
+          externalId: l.href.split("/").pop() || l.href,
+          title: l.title || "Job Opening",
+          companyName: slugName(slug),
+          companyUrl: fullUrl,
+          location: "Unspecified",
+          remote: isRemoteText(l.title),
+          url: l.href,
+          description: "",
+          tags: [],
+        }));
+      } finally {
+        await session.release();
+      }
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function sweepRippling(slug: string): Promise<BoardJob[]> {
+  try {
+    const data = await getJson<Array<{
+      uuid: string; name: string; url?: string;
+      locations?: Array<{ name?: string }>; department?: { name?: string };
+      workLocationType?: string; publishedAt?: string;
+    }>>(`https://api.rippling.com/platform/api/ats/v1/board/${slug}/jobs`);
+    return data.map(j => {
+      const location = j.locations?.map(l => l.name).filter(Boolean).join(", ") || "";
+      const remote = j.workLocationType === "REMOTE" || isRemoteText(location);
+      const url = j.url || `https://ats.rippling.com/${slug}/jobs/${j.uuid}`;
+      return {
+        board: "rippling",
+        externalId: j.uuid,
+        title: j.name,
+        companyName: slugName(slug),
+        companyUrl: `https://ats.rippling.com/${slug}/jobs`,
+        location: location || (remote ? "Remote" : "Unspecified"),
+        remote,
+        url,
+        description: j.department?.name || "",
+        tags: j.department?.name ? [j.department.name] : [],
+        postedAt: toDate(j.publishedAt),
+      };
+    });
+  } catch {
+    try {
+      const session = await getPlaywrightEngine().acquirePage("ats.rippling.com");
+      try {
+        const fullUrl = `https://ats.rippling.com/${slug}/jobs`;
+        await session.page.goto(fullUrl, { timeout: 20000, waitUntil: "domcontentloaded" });
+        await session.page.waitForTimeout(2000);
+        const links = await session.page.$$eval('a[href*="/jobs/"]', (anchors: any[]) =>
+          anchors.map(a => ({ title: a.textContent?.trim(), href: a.href })).filter(x => x.title && x.href)
+        );
+        return links.slice(0, 25).map(l => ({
+          board: "rippling",
+          externalId: l.href.split("/").pop() || l.href,
+          title: l.title || "Job Opening",
+          companyName: slugName(slug),
+          companyUrl: fullUrl,
+          location: "Unspecified",
+          remote: isRemoteText(l.title),
+          url: l.href,
+          description: "",
+          tags: [],
+        }));
+      } finally {
+        await session.release();
+      }
+    } catch {
+      return [];
+    }
+  }
+}
+
 const SWEEPERS: Record<SweepAts, { label: string; sweep: Sweeper }> = {
   greenhouse: { label: "Greenhouse companies", sweep: sweepGreenhouse },
   lever: { label: "Lever companies", sweep: sweepLever },
@@ -564,6 +799,10 @@ const SWEEPERS: Record<SweepAts, { label: string; sweep: Sweeper }> = {
   workable: { label: "Workable companies", sweep: sweepWorkable },
   smartrecruiters: { label: "SmartRecruiters companies", sweep: sweepSmartRecruiters },
   recruitee: { label: "Recruitee companies", sweep: sweepRecruitee },
+  workday: { label: "Workday companies", sweep: sweepWorkday },
+  bamboohr: { label: "BambooHR companies", sweep: sweepBambooHR },
+  breezy: { label: "BreezyHR companies", sweep: sweepBreezy },
+  rippling: { label: "Rippling companies", sweep: sweepRippling },
 };
 
 // ─── Registry ───────────────────────────────────────────────────
@@ -733,12 +972,27 @@ export async function ingestBoardJobs(items: BoardJob[]): Promise<{ added: numbe
         continue;
       }
 
+      const companyId = await upsertCompany(item);
+      const normalizedTitle = normalizeJobTitle(item.title);
+
+      // Deduplicate identical role postings from same company across different cities or reposts
+      const [existingByRole] = await db.select({ id: jobs.id })
+        .from(jobs)
+        .where(and(eq(jobs.companyId, companyId), eq(jobs.normalizedTitle, normalizedTitle)))
+        .limit(1);
+
+      if (existingByRole) {
+        await db.update(jobs).set({ lastVerifiedAt: new Date() }).where(eq(jobs.id, existingByRole.id));
+        skipped++;
+        continue;
+      }
+
       const jobId = uuidv4();
       await db.insert(jobs).values({
         id: jobId,
-        companyId: await upsertCompany(item),
+        companyId,
         title: item.title,
-        normalizedTitle: normalizeJobTitle(item.title),
+        normalizedTitle,
         description: item.description,
         skills: JSON.stringify(skills),
         locationJson: JSON.stringify(location),
