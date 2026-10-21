@@ -1,24 +1,27 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
-  <head>
-    <script>
-      (function() {
-        try {
-          var saved = localStorage.getItem('agentforge-theme');
-          var themes = ['soft-sand','ocean','forest','pastel-dreamland','dark','midnight'];
-          var theme = themes.indexOf(saved) >= 0 ? saved : 'soft-sand';
-          document.documentElement.setAttribute('data-theme', theme);
-        } catch (e) {}
-      })();
-    </script>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Huntly: open-source job intelligence for software engineers" />
-    <title>Huntly</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+
+<head>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('huntly-theme');
+        var themes = ['soft-sand', 'ocean', 'forest', 'pastel-dreamland', 'dark', 'midnight'];
+        var theme = themes.indexOf(saved) >= 0 ? saved : 'soft-sand';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) { }
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Huntly: open-source job intelligence for software engineers" />
+  <title>Huntly</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is([data-theme="dark"] *, [data-theme="midnight"] *));
 
-/* shadcn semantic tokens resolve to the AgentForge tokens below, so every theme works for both. */
+/* shadcn semantic tokens resolve to the Huntly tokens below, so every theme works for both. */
 @theme inline {
   --color-background: var(--bg-primary);
   --color-foreground: var(--text-primary);
@@ -40,7 +40,7 @@
 }
 
 /* =========================================================================
-   AGENTFORGE DESIGN SYSTEM
+   HUNTLY DESIGN SYSTEM
    Tokens first, then base, then primitives. Themes only override tokens.
    Brand: forge ember on warm paper. Dark: warm graphite.
    ========================================================================= */
