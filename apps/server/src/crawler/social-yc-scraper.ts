@@ -4,7 +4,7 @@ import { getDatabase, jobs, companies, sources, resumes } from "@huntly/database
 import { eq, or } from "drizzle-orm";
 import { normalizeJobTitle, extractSkillsFromText } from "../utils/normalize.js";
 import { JobMatcher } from "../services/job-matcher.js";
-import { SerperSearchProvider, SearchResult } from "./search-provider.js";
+import { createSearchProvider, hasSearchApiKey, type SearchProvider, type SearchResult } from "./search-provider.js";
 
 export interface SocialJobItem {
   id: string;
@@ -97,12 +97,11 @@ export function extractMetadataFromText(text: string): ParsedCompensation {
 }
 
 export class SocialAndYCScraper {
-  private serper: SerperSearchProvider | null = null;
+  private searchProvider: SearchProvider | null = null;
 
   constructor() {
-    const key = process.env["SERPER_API_KEY"];
-    if (key && key.trim()) {
-      this.serper = new SerperSearchProvider(key.trim());
+    if (hasSearchApiKey()) {
+      this.searchProvider = createSearchProvider();
     }
   }
 
@@ -115,7 +114,7 @@ export class SocialAndYCScraper {
     location?: string;
     limit?: number;
   }): Promise<SocialJobItem[]> {
-    if (!this.serper) return [];
+    if (!this.searchProvider) return [];
 
     const role = options.role || options.keywords || "Software Engineer";
     const loc = options.location || "";
@@ -128,7 +127,7 @@ export class SocialAndYCScraper {
 
     const allResults: SearchResult[] = [];
     for (const q of searchQueries) {
-      const results = await this.serper.search(q);
+      const results = await this.searchProvider.search(q);
       allResults.push(...results);
     }
 
@@ -199,7 +198,7 @@ export class SocialAndYCScraper {
     location?: string;
     limit?: number;
   }): Promise<SocialJobItem[]> {
-    if (!this.serper) return [];
+    if (!this.searchProvider) return [];
 
     const role = options.role || options.keywords || "Software Engineer";
     const loc = options.location || "";
@@ -214,7 +213,7 @@ export class SocialAndYCScraper {
 
     const allResults: SearchResult[] = [];
     for (const q of searchQueries) {
-      const results = await this.serper.search(q);
+      const results = await this.searchProvider.search(q);
       allResults.push(...results);
     }
 

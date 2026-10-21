@@ -14,6 +14,7 @@ import type { BoardJob, FetchOpts } from "./job-boards-shared.js";
 // Cyclic (job-boards.ts spreads HARD_BOARDS into its registry); emitLive is only called at run time.
 import { emitLive } from "./job-boards.js";
 import { getPlaywrightEngine } from "./playwright-engine.js";
+import { createSearchProvider, SEARCH_KEYS } from "./search-provider.js";
 
 export interface HardFetchOpts extends FetchOpts {
   /** "India" when omitted: these sources are queried for the user's market. */
@@ -22,7 +23,7 @@ export interface HardFetchOpts extends FetchOpts {
 
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 /** Product token looked up in robots.txt; sites that don't name it fall back to the `*` group. */
-const ROBOTS_AGENT = "agentforge";
+const ROBOTS_AGENT = "huntly";
 const MIN_GAP_MS = Math.max(2000, Number(process.env["CRAWLER_REQUEST_DELAY_MS"]) || 0);
 const PAGES_PER_RUN = 30;
 const DETAIL_PAGES_PER_RUN = 12;
@@ -897,26 +898,14 @@ function parseSerpTitle(raw: string, snippet: string): { title: string; company?
   return out;
 }
 
-async function serper(q: string, page: number): Promise<Array<{ title: string; link: string; snippet?: string; date?: string }>> {
-  const key = process.env["SERPER_API_KEY"];
-  if (!key) throw new BlockedError("no SERPER_API_KEY for the Google index fallback");
-  const resp = await fetch("https://google.serper.dev/search", {
-    method: "POST",
-    headers: { "X-API-KEY": key, "Content-Type": "application/json" },
-    body: JSON.stringify({ q, gl: "in", hl: "en", num: 10, page, tbs: "qdr:m" }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (!resp.ok) throw new Error(`Serper HTTP ${resp.status}`);
-  return ((await resp.json()) as { organic?: Array<{ title: string; link: string; snippet?: string; date?: string }> }).organic ?? [];
-}
-
 async function fromGoogleIndex(run: Run, board: string, spec: IndexSpec, { keywords, location, limit }: { keywords: string; location: string; limit: number }): Promise<BoardJob[]> {
-  run.techniques.push(`Google index via Serper (${spec.site})`);
+  const provider = createSearchProvider();
+  run.techniques.push(`Web search index via ${provider.name} (${spec.site})`);
   const q = `${spec.site} "${keywords}" ${spec.near ? spec.near(location) : isCountryWide(location) ? "India" : location}`;
   const out: BoardJob[] = [];
-  // Each Serper page costs one credit; three pages is enough for a refresh.
+  // Each search page costs 1 credit; up to 3 pages is enough for a refresh.
   for (let page = 1; page <= Math.min(3, Math.ceil(limit / 10)); page++) {
-    const results = await serper(q, page);
+    const results = await provider.search(q, { page, num: 10, country: isCountryWide(location) ? "IN" : undefined });
     for (const r of results) {
       const parsed = parseSerpTitle(r.title, r.snippet ?? "");
       const snippet = clean(r.snippet);
@@ -925,12 +914,12 @@ async function fromGoogleIndex(run: Run, board: string, spec: IndexSpec, { keywo
       const loc = parsed.location ?? (isRemoteText(parsed.title, snippet) ? "Remote" : "");
       out.push({
         board,
-        externalId: spec.idFrom?.(r.link) ?? r.link,
+        externalId: spec.idFrom?.(r.url) ?? r.url,
         title: parsed.title,
         companyName: parsed.company ?? "Unknown",
         location: loc || (isCountryWide(location) ? "India" : location),
         remote: isRemoteText(loc, parsed.title),
-        url: r.link,
+        url: r.url,
         description: snippet,
         employmentType: employmentType(parsed.title, snippet.match(/\b(full[- ]time|part[- ]time|contract|internship|freelance)\b/i)?.[0]),
         tags: [],
@@ -990,6 +979,7 @@ interface HardSource {
   direct?: Direct;
   index?: IndexSpec;
   needsKey?: readonly string[];
+  needsAnyKey?: readonly string[];
 }
 
 const lastDigits = (url: string) => url.match(/(\d{6,})(?:[/?]|$)/)?.[1];
@@ -1011,7 +1001,7 @@ const SOURCES: Record<string, HardSource> = {
     label: "Naukri",
     status: "Google index only: search is client-rendered behind a guarded API and robots.txt opts out AI user agents.",
     index: { site: "site:naukri.com/job-listings", near: loc => (isCountryWide(loc) ? "" : loc), idFrom: lastDigits },
-    needsKey: ["SERPER_API_KEY"],
+    needsAnyKey: SEARCH_KEYS,
   },
   glassdoor: {
     label: "Glassdoor",
@@ -1039,13 +1029,13 @@ const SOURCES: Record<string, HardSource> = {
     label: "ZipRecruiter",
     status: "Google index only: robots.txt disallows everything for generic agents (and HTTP 403).",
     index: { site: "site:ziprecruiter.com/c", near: () => "remote" },
-    needsKey: ["SERPER_API_KEY"],
+    needsAnyKey: SEARCH_KEYS,
   },
   dice: {
     label: "Dice",
     status: "Google index only: robots.txt disallows /jobs?q and /job-detail pages.",
     index: { site: "site:dice.com/job-detail", near: () => "" },
-    needsKey: ["SERPER_API_KEY"],
+    needsAnyKey: SEARCH_KEYS,
   },
   simplyhired: {
     label: "SimplyHired",
@@ -1088,10 +1078,11 @@ async function runSource(id: string, src: HardSource, opts: HardFetchOpts): Prom
 }
 
 /** Registry entries in the job-boards.ts BoardSource shape; `status` documents the technique. */
-export const HARD_BOARDS: Record<string, { label: string; status: string; needsKey?: readonly string[]; fetch(opts: HardFetchOpts): Promise<BoardJob[]> }> =
+export const HARD_BOARDS: Record<string, { label: string; status: string; needsKey?: readonly string[]; needsAnyKey?: readonly string[]; fetch(opts: HardFetchOpts): Promise<BoardJob[]> }> =
   Object.fromEntries(Object.entries(SOURCES).map(([id, src]) => [id, {
     label: src.label,
     status: src.status,
     needsKey: src.needsKey,
+    needsAnyKey: src.needsAnyKey,
     fetch: (opts: HardFetchOpts) => runSource(id, src, opts),
   }]));
