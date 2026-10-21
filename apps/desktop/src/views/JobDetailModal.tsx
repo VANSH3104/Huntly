@@ -369,6 +369,26 @@ export const JobDetailModal: React.FC = () => {
                       label="Status"
                       value={<span className="capitalize">{job?.status || "Active"}</span>}
                     />
+                    {job?.ghostRisk && job.ghostRisk !== "none" && (
+                      <Row
+                        label="Authenticity"
+                        value={
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className={cn(
+                                "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium cursor-help",
+                                job.ghostRisk === "high" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground"
+                              )}>
+                                {job.ghostRisk === "high" ? "High Ghost Risk" : "Stale / Repost Risk"}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs text-xs">
+                              {job.ghostReasons?.join(". ") || "Listing may be an evergreen posting"}
+                            </TooltipContent>
+                          </Tooltip>
+                        }
+                      />
+                    )}
                   </dl>
                   {skills.length > 0 && (
                     <>

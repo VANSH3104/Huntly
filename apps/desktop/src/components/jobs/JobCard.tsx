@@ -187,6 +187,24 @@ export function JobCard({ job, onOpen, onTrack, onApply, onAutoApply }: JobCardP
               <span>{source}</span>
             </>
           )}
+          {job.ghostRisk && job.ghostRisk !== "none" && (
+            <>
+              <Dot />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={cn(
+                    "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium cursor-help",
+                    job.ghostRisk === "high" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground"
+                  )}>
+                    {job.ghostRisk === "high" ? "High Ghost Risk" : "Stale Signal"}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs">
+                  {job.ghostReasons?.join(". ") || "Listing may be an evergreen or stale role"}
+                </TooltipContent>
+              </Tooltip>
+            </>
+          )}
         </div>
 
         {shown.length > 0 && (
