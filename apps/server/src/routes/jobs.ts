@@ -3,6 +3,7 @@ import { getDatabase, jobs, companies, jobMatches, aiAnalyses, applications, res
 import { eq, desc, asc, and, gte, lte, like, inArray, sql, ne, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeLocation } from "../utils/normalize.js";
+import { GhostJobDetector } from "../services/ghost-detector.js";
 
 export const jobsRouter = Router();
 
@@ -657,6 +658,46 @@ jobsRouter.get("/", async (req, res, next) => {
           location: Math.round(row.locationScore ?? 88),
         },
         aiPriority: row.aiAnalysis?.applicationPriority ?? null,
+        ghostRisk: GhostJobDetector.analyze({
+          title: row.job.title,
+          companyName: row.company?.name || "Verified Company",
+          description: row.job.description,
+          postedAt: row.job.postedAt,
+          createdAt: row.job.firstSeenAt,
+          sourceUrl: row.job.sourceUrl,
+          board: row.job.ats,
+          isClosed: row.job.status === "closed",
+        }).riskLevel,
+        ghostScore: GhostJobDetector.analyze({
+          title: row.job.title,
+          companyName: row.company?.name || "Verified Company",
+          description: row.job.description,
+          postedAt: row.job.postedAt,
+          createdAt: row.job.firstSeenAt,
+          sourceUrl: row.job.sourceUrl,
+          board: row.job.ats,
+          isClosed: row.job.status === "closed",
+        }).riskScore,
+        isGhost: GhostJobDetector.analyze({
+          title: row.job.title,
+          companyName: row.company?.name || "Verified Company",
+          description: row.job.description,
+          postedAt: row.job.postedAt,
+          createdAt: row.job.firstSeenAt,
+          sourceUrl: row.job.sourceUrl,
+          board: row.job.ats,
+          isClosed: row.job.status === "closed",
+        }).isGhost,
+        ghostReasons: GhostJobDetector.analyze({
+          title: row.job.title,
+          companyName: row.company?.name || "Verified Company",
+          description: row.job.description,
+          postedAt: row.job.postedAt,
+          createdAt: row.job.firstSeenAt,
+          sourceUrl: row.job.sourceUrl,
+          board: row.job.ats,
+          isClosed: row.job.status === "closed",
+        }).reasons,
       };
     });
 
@@ -964,6 +1005,46 @@ jobsRouter.get("/:id", async (req, res, next) => {
         applicationPriority: row.ai.applicationPriority,
         resumeTailoringSuggestions: safeParseJSON(row.ai.resumeTailoringSuggestions, []),
       } : null,
+      ghostRisk: GhostJobDetector.analyze({
+        title: jobData.title,
+        companyName: row.company?.name || "Verified Company",
+        description: jobData.description,
+        postedAt: jobData.postedAt,
+        createdAt: jobData.firstSeenAt,
+        sourceUrl: jobData.sourceUrl,
+        board: jobData.ats,
+        isClosed: jobData.status === "closed",
+      }).riskLevel,
+      ghostScore: GhostJobDetector.analyze({
+        title: jobData.title,
+        companyName: row.company?.name || "Verified Company",
+        description: jobData.description,
+        postedAt: jobData.postedAt,
+        createdAt: jobData.firstSeenAt,
+        sourceUrl: jobData.sourceUrl,
+        board: jobData.ats,
+        isClosed: jobData.status === "closed",
+      }).riskScore,
+      isGhost: GhostJobDetector.analyze({
+        title: jobData.title,
+        companyName: row.company?.name || "Verified Company",
+        description: jobData.description,
+        postedAt: jobData.postedAt,
+        createdAt: jobData.firstSeenAt,
+        sourceUrl: jobData.sourceUrl,
+        board: jobData.ats,
+        isClosed: jobData.status === "closed",
+      }).isGhost,
+      ghostReasons: GhostJobDetector.analyze({
+        title: jobData.title,
+        companyName: row.company?.name || "Verified Company",
+        description: jobData.description,
+        postedAt: jobData.postedAt,
+        createdAt: jobData.firstSeenAt,
+        sourceUrl: jobData.sourceUrl,
+        board: jobData.ats,
+        isClosed: jobData.status === "closed",
+      }).reasons,
     });
   } catch (err) {
     next(err);

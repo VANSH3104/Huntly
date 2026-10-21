@@ -55,6 +55,11 @@ export interface Job {
   lastVerifiedAt: Date;
   status: JobStatus;
   contentHash: string;
+
+  ghostRisk?: "none" | "low" | "medium" | "high";
+  ghostScore?: number;
+  isGhost?: boolean;
+  ghostReasons?: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════
