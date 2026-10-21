@@ -154,12 +154,152 @@ export function extractDomain(url: string): string | null {
   }
 }
 
-// ─── Skills Extraction ──────────────────────────────────────────
+// ─── Role Title & Deduplication Normalization ───────────────────
+
+import crypto from "node:crypto";
+
+const TRAILING_CLAUSE_PATTERN = /(\s*,\s*|\s+[|@]\s*|\s+[-–—]\s*)[^,|@\-–—]*$/;
+
+/**
+ * Strips trailing location/qualifier clauses (e.g. "Senior Frontend Engineer - Bengaluru" -> "Senior Frontend Engineer")
+ * so multi-city reposts of the same vacancy collapse to one canonical role.
+ */
+export function stripTrailingClause(title: string): string {
+  if (!title) return "";
+  const stripped = title.replace(TRAILING_CLAUSE_PATTERN, "").trim();
+  const words = stripped.split(/\s+/).filter(Boolean);
+  return words.length >= 2 ? stripped : title.trim();
+}
+
+/**
+ * Computes a deterministic SHA-256 fingerprint representing a job's true role identity
+ * (company + normalized title + core description), ignoring volatile fields like external IDs,
+ * timestamps, and location variations.
+ */
+export function calculateRoleFingerprint(company: string, title: string, description = ""): string {
+  const cleanCompany = (company || "unknown").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+  const cleanTitle = stripTrailingClause(title)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const cleanDesc = (description || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&[a-z]+;/g, " ")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
+
+  return crypto
+    .createHash("sha256")
+    .update(`${cleanCompany}\x1e${cleanTitle}\x1e${cleanDesc}`)
+    .digest("hex");
+}
+
+// ─── Skills Extraction (Curated Dictionary) ─────────────────────
+
+const CANONICAL_SKILLS: Record<string, string> = {
+  // Languages
+  typescript: "TypeScript", ts: "TypeScript",
+  javascript: "JavaScript", js: "JavaScript",
+  python: "Python", py: "Python",
+  golang: "Go", go: "Go",
+  rust: "Rust",
+  java: "Java",
+  kotlin: "Kotlin",
+  swift: "Swift",
+  csharp: "C#", "c#": "C#",
+  cpp: "C++", "c++": "C++",
+  c: "C",
+  ruby: "Ruby",
+  php: "PHP",
+  scala: "Scala",
+  elixir: "Elixir",
+
+  // Frontend & Mobile
+  react: "React", reactjs: "React",
+  vue: "Vue.js", vuejs: "Vue.js",
+  angular: "Angular",
+  svelte: "Svelte", sveltekit: "Svelte",
+  nextjs: "Next.js", "next.js": "Next.js",
+  nuxt: "Nuxt", nuxtjs: "Nuxt",
+  remix: "Remix",
+  flutter: "Flutter",
+  reactnative: "React Native", "react native": "React Native",
+  tailwind: "Tailwind CSS", tailwindcss: "Tailwind CSS",
+  html5: "HTML5", html: "HTML5",
+  css3: "CSS3", css: "CSS3",
+  sass: "Sass", scss: "Sass",
+
+  // Backend & APIs
+  nodejs: "Node.js", "node.js": "Node.js", node: "Node.js",
+  express: "Express.js", expressjs: "Express.js",
+  fastapi: "FastAPI",
+  django: "Django",
+  flask: "Flask",
+  spring: "Spring Boot", springboot: "Spring Boot", "spring boot": "Spring Boot",
+  nestjs: "NestJS",
+  graphql: "GraphQL",
+  rest: "REST APIs", "rest api": "REST APIs", "restful": "REST APIs",
+  grpc: "gRPC",
+
+  // Databases & Storage
+  postgresql: "PostgreSQL", postgres: "PostgreSQL",
+  mysql: "MySQL",
+  mongodb: "MongoDB", mongo: "MongoDB",
+  redis: "Redis",
+  sqlite: "SQLite",
+  cassandra: "Cassandra",
+  dynamodb: "DynamoDB",
+  elasticsearch: "Elasticsearch",
+  clickhouse: "ClickHouse",
+  supabase: "Supabase",
+
+  // Cloud & DevOps & Infra
+  docker: "Docker",
+  kubernetes: "Kubernetes", k8s: "Kubernetes",
+  aws: "AWS", amazonwebservices: "AWS",
+  gcp: "GCP", googlecloud: "GCP",
+  azure: "Azure",
+  terraform: "Terraform",
+  ansible: "Ansible",
+  ci_cd: "CI/CD", cicd: "CI/CD",
+  github_actions: "GitHub Actions",
+  linux: "Linux",
+  nginx: "Nginx",
+  kafka: "Kafka",
+  rabbitmq: "RabbitMQ",
+
+  // AI & Data
+  pytorch: "PyTorch",
+  tensorflow: "TensorFlow",
+  langchain: "LangChain",
+  llamaindex: "LlamaIndex",
+  huggingface: "Hugging Face",
+  pandas: "Pandas",
+  numpy: "NumPy",
+  scikit_learn: "Scikit-Learn",
+  spark: "Apache Spark",
+  airflow: "Apache Airflow",
+  snowflake: "Snowflake",
+  databricks: "Databricks",
+};
 
 export function extractSkillsFromText(text: string): string[] {
   if (!text) return [];
-  const techPattern = /\b(React(?:\.js)?|Vue(?:\.js)?|Angular|Next\.js|TypeScript|JavaScript|Python|Java|Go|Rust|C\+\+|Node(?:\.js)?|Express|PostgreSQL|MySQL|MongoDB|Redis|Docker|Kubernetes|AWS|GCP|Azure|Git|Linux|GraphQL|REST|Spring(?:\s*Boot)?|Django|Flask|FastAPI|TensorFlow|PyTorch|Pandas|NumPy|HTML|CSS|Tailwind|Sass|Kotlin|Swift|Dart|Flutter|React\s*Native|Elasticsearch)\b/gi;
-  const matches = [...text.matchAll(techPattern)];
-  return [...new Set(matches.map(m => m[0]))];
+  const found = new Set<string>();
+  const lower = ` ${text.toLowerCase().replace(/[^a-z0-9#+.]/g, " ")} `;
+
+  for (const [key, canonical] of Object.entries(CANONICAL_SKILLS)) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`(?<=[\\s,./;:])${escaped}(?=[\\s,./;:])`, "i");
+    if (re.test(lower)) {
+      found.add(canonical);
+    }
+  }
+
+  return [...found];
 }
 
