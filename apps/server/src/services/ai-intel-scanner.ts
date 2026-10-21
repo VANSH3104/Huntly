@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { GeminiClient } from "./gemini.js";
-import { SerperSearchProvider, SearchResult } from "../crawler/search-provider.js";
+import { createSearchProvider, hasSearchApiKey, type SearchProvider, type SearchResult } from "../crawler/search-provider.js";
 
 export interface IntelItem {
   id: string;
@@ -20,14 +20,13 @@ export interface IntelItem {
 }
 
 export class AIIntelScannerService {
-  private serper: SerperSearchProvider | null = null;
+  private searchProvider: SearchProvider | null = null;
   private cachedFeed: IntelItem[] = [];
   private lastFetchedAt: number = 0;
 
   constructor() {
-    const key = process.env["SERPER_API_KEY"];
-    if (key && key.trim()) {
-      this.serper = new SerperSearchProvider(key.trim());
+    if (hasSearchApiKey()) {
+      this.searchProvider = createSearchProvider();
     }
   }
 
@@ -77,7 +76,7 @@ export class AIIntelScannerService {
    * Fetches latest AI research and technical breakthroughs via Serper
    */
   async fetchTrendingAIWeb(): Promise<SearchResult[]> {
-    if (!this.serper) return [];
+    if (!this.searchProvider) return [];
 
     const queries = [
       `("new model" OR "state of the art" OR "agent architecture") site:news.ycombinator.com OR site:github.com`,
@@ -87,7 +86,7 @@ export class AIIntelScannerService {
     const results: SearchResult[] = [];
     for (const q of queries) {
       try {
-        const hits = await this.serper.search(q);
+        const hits = await this.searchProvider.search(q);
         results.push(...hits);
       } catch {}
     }
@@ -98,7 +97,7 @@ export class AIIntelScannerService {
    * Fetches live AI agent threads, announcements, and architectural breakdowns from X (Twitter)
    */
   async fetchTwitterAIIntel(): Promise<SearchResult[]> {
-    if (!this.serper) return [];
+    if (!this.searchProvider) return [];
 
     const queries = [
       `site:x.com ("AI agent" OR "autonomous agent" OR "multi-agent" OR "MCP" OR "Model Context Protocol") ("architecture" OR "released" OR "benchmark" OR "framework")`,
@@ -109,7 +108,7 @@ export class AIIntelScannerService {
     const results: SearchResult[] = [];
     for (const q of queries) {
       try {
-        const hits = await this.serper.search(q);
+        const hits = await this.searchProvider.search(q);
         results.push(...hits);
       } catch {}
     }

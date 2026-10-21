@@ -1,7 +1,7 @@
 import { getDatabase, jobs, companies, resumes } from "@huntly/database";
 import { eq, ne, sql, desc, and } from "drizzle-orm";
 import { GeminiClient } from "./gemini.js";
-import { SerperSearchProvider, SearchResult } from "../crawler/search-provider.js";
+import { createSearchProvider, hasSearchApiKey, SearchProvider, SearchResult } from "../crawler/search-provider.js";
 
 export interface AgentJobSearchInput {
   query: string;
@@ -76,14 +76,13 @@ export interface AgentJobSearchResponse {
 
 export class AgentJobSearchService {
   private gemini: GeminiClient;
-  private searchProvider: SerperSearchProvider | null = null;
+  private searchProvider: SearchProvider | null = null;
   private static companyIntelligenceCache = new Map<string, CompanyIntelligence>();
 
   constructor() {
     this.gemini = new GeminiClient();
-    const serperKey = process.env["SERPER_API_KEY"];
-    if (serperKey && serperKey.trim()) {
-      this.searchProvider = new SerperSearchProvider(serperKey.trim());
+    if (hasSearchApiKey()) {
+      this.searchProvider = createSearchProvider();
     }
   }
 
@@ -281,8 +280,8 @@ Return ONLY a JSON object with this schema:
             );
 
             webSnippets = [
-              ...salaryResults.slice(0, 3).map((r) => `${r.title}: ${r.snippet}`),
-              ...repResults.slice(0, 2).map((r) => `${r.title}: ${r.snippet}`),
+              ...salaryResults.slice(0, 3).map((r: SearchResult) => `${r.title}: ${r.snippet}`),
+              ...repResults.slice(0, 2).map((r: SearchResult) => `${r.title}: ${r.snippet}`),
             ];
           }
 
